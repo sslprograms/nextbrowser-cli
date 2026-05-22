@@ -19,6 +19,7 @@ def test_action_spec_fill():
 
 def test_steps_file():
     path = Path(__file__).resolve().parent.parent / "examples" / "steps-reddit.json"
-    steps = load_steps_file(path)
+    url, steps = load_steps_file(path)
+    assert url == "https://www.reddit.com"
     assert len(steps) >= 5
     assert steps[0].type == "goto"

@@ -11,7 +11,7 @@ from nextbrowser_harness.browser_actions import ActionSpec, load_steps_file, run
 from nextbrowser_harness.config import HarnessConfig
 from nextbrowser_harness.layers.browser.antidetect import browser_layer_for
 from nextbrowser_harness.tiers.resolver import TierResolver
-from nextbrowser_harness.workflows.browse import BrowseResult  # noqa: F401 — shared result type
+from nextbrowser_harness.workflows.browser_result import BrowseResult
 
 
 def exec_site(
@@ -39,7 +39,10 @@ def exec_site(
 
     specs: list[ActionSpec] = []
     if steps_file:
-        specs.extend(load_steps_file(steps_file))
+        steps_url, steps = load_steps_file(steps_file)
+        if steps_url:
+            url = steps_url
+        specs.extend(steps)
     if js_file:
         specs.append(ActionSpec.parse(f"jsfile:{js_file}"))
     if js:
@@ -92,15 +95,15 @@ def exec_site(
         title = next((r.detail for r in results if r.name == "title" and r.ok), None)
         final = next((r.detail for r in results if r.name == "final_url" and r.ok), page.url)
         blocked = page.locator("text=/captcha|prove your humanity|blocked|access denied/i").count() > 0
-        all_ok = all(r.ok for r in results if r.name not in ("reddit_feed_check", "wait_load"))
+        optional = {"reddit_feed_check", "wait_load"}
+        required_ok = [r for r in results if r.name not in optional]
+        navigated = any(r.ok for r in results if r.name in ("goto", "eval", "jsfile"))
 
         return BrowseResult(
             url=url,
             browser=config.browser,
             tier=use_tier,
-            success=not blocked and all_ok and any(
-                r.ok for r in results if r.name in ("goto", "eval", "jsfile")
-            ),
+            success=not blocked and navigated and (not required_ok or all(r.ok for r in required_ok)),
             title=title,
             final_url=final,
             actions=[asdict(r) for r in results],

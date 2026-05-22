@@ -64,12 +64,17 @@ class ActionSpec:
         return cls(type=s.lower())
 
 
-def load_steps_file(path: str | Path) -> list[ActionSpec]:
-    data = json.loads(Path(path).read_text(encoding="utf-8"))
+def load_steps_file(path: str | Path) -> tuple[str | None, list[ActionSpec]]:
+    """
+    Load agent step plan from JSON. Returns optional start URL and action specs.
+    Format: {"url": "...", "actions": ["goto", "eval:...", ...]} or a bare actions array.
+    """
+    data = json.loads(Path(path).expanduser().read_text(encoding="utf-8"))
     if isinstance(data, list):
-        return [ActionSpec.parse(x) for x in data]
+        return None, [ActionSpec.parse(x) for x in data]
+    url = data.get("url") or None
     actions = data.get("actions") or []
-    return [ActionSpec.parse(x) for x in actions]
+    return (str(url) if url else None), [ActionSpec.parse(x) for x in actions]
 
 
 def run_action(page, spec: ActionSpec, *, default_url: str = "", screenshot: str | None = None) -> BrowseActionResult:

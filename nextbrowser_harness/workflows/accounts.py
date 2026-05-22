@@ -58,6 +58,10 @@ class AccountAutomationWorkflow:
 
     def _automation(self):
         if self.config.automation == "browser_use":
+            try:
+                import browser_use  # noqa: F401
+            except ImportError:
+                return PlaywrightAutomationLayer.from_config(self.config)
             return BrowserUseLayer.from_config(self.config)
         return PlaywrightAutomationLayer.from_config(self.config)
 

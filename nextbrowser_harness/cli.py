@@ -176,7 +176,7 @@ def main(argv: list[str] | None = None) -> int:
         kw = _exec_kwargs(args)
         if not args.action and not args.js and not args.js_file and not args.steps_file:
             kw["actions"] = ["goto", "wait_load", "title", "scroll", "reddit_feed_check", "final_url"]
-        out = harness.exec(args.url, **kw)
+        out = harness.browse(args.url, profile_id=args.profile, **kw)
         print(json.dumps(out, indent=2))
         return 0 if out.get("success") else 1
 

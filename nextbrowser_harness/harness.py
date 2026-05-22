@@ -3,7 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 
 from nextbrowser_harness.config import HarnessConfig, resolve_config_path
-from nextbrowser_harness.platform_paths import platform_status
+from nextbrowser_harness.agent_navigation import agent_command_recipes
+from nextbrowser_harness.platform_paths import cli_command_string, platform_status
 from nextbrowser_harness.onboarding import onboard_from_env, onboard_interactive
 from nextbrowser_harness.tiers.resolver import TierResolver
 from nextbrowser_harness.workflows.accounts import AccountAutomationWorkflow
@@ -31,6 +32,11 @@ class Harness:
         return cls(cfg)
 
     def status(self) -> dict:
+        cli = cli_command_string()
+        recipes = agent_command_recipes()
+        for key, val in list(recipes.items()):
+            if isinstance(val, str) and "{cli}" in val:
+                recipes[key] = val.replace("{cli}", cli)
         return {
             "version": "0.1.2",
             "config": str(resolve_config_path()),
@@ -40,6 +46,7 @@ class Harness:
             "automation": self.config.automation,
             "llm": self.config.llm_model or "(inherits from agent)",
             "platform": platform_status(),
+            "agent_navigation": recipes,
         }
 
     def scrape(self, url: str, *, tier: int | None = None) -> dict:
@@ -75,8 +82,12 @@ class Harness:
         screenshot: str | None = None,
         actions: list[str] | None = None,
         headless: bool | None = None,
+        steps_file: str | None = None,
+        js: str | None = None,
+        js_file: str | None = None,
+        keep_open: bool = False,
     ) -> dict:
-        return browse_site(
+        out = browse_site(
             self.config,
             url,
             tier=tier,
@@ -84,7 +95,14 @@ class Harness:
             screenshot=screenshot,
             actions=actions,
             headless=headless,
+            steps_file=steps_file,
+            js=js,
+            js_file=js_file,
+            keep_open=keep_open,
         ).to_dict()
+        out["agent_mode"] = True
+        out["hint"] = "Navigation via nextbrowser browse/exec; do not spawn separate Playwright scripts."
+        return out
 
     def exec(
         self,
@@ -100,7 +118,7 @@ class Harness:
         headless: bool | None = None,
         keep_open: bool = False,
     ) -> dict:
-        return exec_site(
+        out = exec_site(
             self.config,
             url,
             tier=tier,
@@ -113,3 +131,6 @@ class Harness:
             headless=headless,
             keep_open=keep_open,
         ).to_dict()
+        out["agent_mode"] = True
+        out["hint"] = "Navigation via nextbrowser exec; do not spawn separate Playwright scripts."
+        return out

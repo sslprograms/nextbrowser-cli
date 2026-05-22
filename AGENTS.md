@@ -2,7 +2,9 @@
 
 Official CLI repo: [github.com/sslprograms/nextbrowser-cli](https://github.com/sslprograms/nextbrowser-cli)
 
-This project is the `nextbrowser` CLI (`nextbrowser-harness` package). Prefer running commands over inventing browser code.
+This project is the `nextbrowser` CLI (`nextbrowser-harness` package).
+
+**Navigation policy:** Use `nextbrowser exec` / `browse` / `scrape` — never generate standalone Playwright Python unless the user explicitly requests it. Run `nextbrowser status` and follow `agent_navigation` in the JSON.
 
 ## CLI (use this prefix)
 

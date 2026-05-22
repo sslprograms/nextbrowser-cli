@@ -16,7 +16,14 @@ metadata:
 
 # Nextbrowser Harness (agent skill)
 
-Run **`nextbrowser`** (or `python -m nextbrowser_harness.cli`) with **`--json`** output. Always run `nextbrowser status` first and use `platform.cli` from the JSON.
+Run **`nextbrowser`** (or `python -m nextbrowser_harness.cli`) with **`--json`** output. Always run `nextbrowser status` first and use `platform.cli` plus **`agent_navigation`** recipes from the JSON.
+
+## Agent navigation policy (required)
+
+- **Do NOT** write standalone Playwright/Puppeteer/Selenium Python scripts for navigation unless the user explicitly asks.
+- **DO** run shell commands: `exec`, `browse`, `scrape`, `account run` with `eval:` / `--action` / `--steps-file`.
+- Small **JavaScript snippets** (`--js` or `.js` files) are fine — the CLI runs them inside the harness browser.
+- Read `nextbrowser status` → `agent_navigation` for copy-paste command templates.
 
 ## Install (once per machine)
 

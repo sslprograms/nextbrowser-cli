@@ -39,7 +39,7 @@ def onboard_interactive() -> HarnessConfig:
         use_case=use_case,
         browser=browser,
         proxy=proxy,
-        automation="browser_use",
+        automation="playwright",
         headless=use_case == "scrape",
         llm_model=os.getenv("ANTHROPIC_MODEL") or os.getenv("OPENAI_MODEL") or None,
     )
@@ -76,7 +76,7 @@ def onboard_from_env() -> HarnessConfig:
         use_case="accounts" if use.startswith("account") else "scrape",
         browser=os.getenv("NEXTBROWSER_BROWSER", "native"),  # type: ignore[arg-type]
         proxy=os.getenv("NEXTBROWSER_PROXY", "nodemaven"),  # type: ignore[arg-type]
-        automation=os.getenv("NEXTBROWSER_AUTOMATION", "browser_use"),  # type: ignore[arg-type]
+        automation=os.getenv("NEXTBROWSER_AUTOMATION", "playwright"),  # type: ignore[arg-type]
         headless=os.getenv("NEXTBROWSER_HEADLESS", "true").lower() in ("1", "true", "yes"),
         llm_model=os.getenv("NEXTBROWSER_LLM_MODEL") or os.getenv("ANTHROPIC_MODEL"),
     )
