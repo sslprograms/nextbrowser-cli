@@ -1,0 +1,21 @@
+{
+  "version": "1.2.0",
+  "domains": {
+    "example.com": 1,
+    "httpbin.org": 1,
+    "jsonplaceholder.typicode.com": 1,
+    "news.ycombinator.com": 2,
+    "github.com": 2,
+    "reddit.com": 3,
+    "www.reddit.com": 3,
+    "old.reddit.com": 3,
+    "linkedin.com": 3,
+    "www.linkedin.com": 3,
+    "amazon.com": 3,
+    "www.amazon.com": 3
+  },
+  "patterns": [
+    {"match": "*.reddit.com", "tier": 3},
+    {"match": "api.*", "tier": 1}
+  ]
+}

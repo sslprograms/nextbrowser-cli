@@ -1,0 +1,12 @@
+{
+  "url": "https://www.reddit.com",
+  "actions": [
+    "goto",
+    "wait:2000",
+    "title",
+    "eval:document.querySelectorAll('article,[data-testid=post-container],.Post').length",
+    "scroll",
+    "reddit_feed_check",
+    "final_url"
+  ]
+}
