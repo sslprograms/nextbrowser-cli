@@ -10,7 +10,7 @@ Official repo: **[sslprograms/nextbrowser-cli](https://github.com/sslprograms/ne
 
 ```powershell
 # Windows — clone or use your existing copy
-cd C:\Users\jakek\Desktop\stan-browser   # or: cd nextbrowser-cli after git clone
+cd C:\path\to\nextbrowser-cli   # after: git clone https://github.com/sslprograms/nextbrowser-cli.git
 python -m venv .venv
 .venv\Scripts\activate
 pip install -e ".[playwright]"
@@ -44,7 +44,7 @@ Skill lands at: `C:\Users\<you>\.openclaw\skills\nextbrowser-harness\`
 
 ### OpenClaw config
 
-Edit `C:\Users\<you>\.openclaw\openclaw.json`:
+Edit `%USERPROFILE%\.openclaw\openclaw.json` (Windows) or `~/.openclaw/openclaw.json`:
 
 ```json5
 {
@@ -73,7 +73,7 @@ Or load skill from the repo without copying:
 {
   skills: {
     load: {
-      extraDirs: ["C:/Users/jakek/Desktop/stan-browser/skills"],
+      extraDirs: ["C:/path/to/nextbrowser-cli/skills"],
     },
   },
 }

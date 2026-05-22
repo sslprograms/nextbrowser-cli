@@ -68,7 +68,7 @@ nextbrowser exec "https://shop.com" --action "goto" --action "click:button.add-t
 
 ```bash
 nextbrowser account add reddit_01
-nextbrowser account run reddit_01 "eval:document.title" --url "https://www.reddit.com" --js "return location.href"
+nextbrowser account run reddit_01 "eval:document.title" --url "https://www.reddit.com"
 ```
 
 Use `NEXTBROWSER_AUTOMATION=playwright` in env (recommended; no extra LLM API key).

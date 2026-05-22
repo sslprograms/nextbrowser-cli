@@ -4,7 +4,25 @@ __pycache__/
 .pytest_cache/
 .nextbrowser.yaml
 .env
+.env.local
 *.egg-info/
 dist/
 build/
 _spec_extract.txt
+
+# Secrets and local runtime data (never commit)
+multilogin_tokens.yaml
+**/multilogin_tokens.yaml
+*.tokens.yaml
+secrets.yaml
+credentials.json
+
+# Local profiles, accounts, test logs
+.nextbrowser/
+profiles/
+accounts.json
+**/accounts.json
+*.log
+nb-product-test/
+nb-test-*.png
+agent-tools/

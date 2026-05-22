@@ -9,16 +9,15 @@ description = "Multimodular browser automation harness for AI agents (MVP)"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
+dependencies = [
+    "requests>=2.31.0",
+    "pyyaml>=6.0",
+]
 
 [project.urls]
 Homepage = "https://github.com/sslprograms/nextbrowser-cli"
 Repository = "https://github.com/sslprograms/nextbrowser-cli"
 Documentation = "https://github.com/sslprograms/nextbrowser-cli/blob/main/docs/AGENT_QUICKSTART.md"
-
-dependencies = [
-    "requests>=2.31.0",
-    "pyyaml>=6.0",
-]
 
 [project.optional-dependencies]
 playwright = ["playwright>=1.40.0"]
