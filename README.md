@@ -2,15 +2,24 @@
 
 Python 3 multimodular browser automation harness for AI agents. Implements the **Nextbrowser_Harness_MVP_v1.2** spec: scrape data or manage accounts, with a four-layer stack (browser → proxy → automation → optional CAPTCHA) and a three-tier scraping model.
 
+**Official CLI repository:** [github.com/sslprograms/nextbrowser-cli](https://github.com/sslprograms/nextbrowser-cli)
+
+The `nextbrowser` command is provided by this package (`nextbrowser-harness` on PyPI name; repo folder `nextbrowser-cli`).
+
 ## Install (Linux / macOS / Windows)
 
+**From GitHub (canonical):**
+
 ```bash
-# Linux / macOS
+git clone https://github.com/sslprograms/nextbrowser-cli.git
+cd nextbrowser-cli
 python3 -m venv .venv && source .venv/bin/activate
 pip install -e ".[playwright]"
 playwright install chromium
 playwright install-deps chromium   # Linux only
 ```
+
+**Or from an existing clone** (e.g. `stan-browser` on your machine):
 
 ```powershell
 # Windows
@@ -41,8 +50,13 @@ Config: `~/.nextbrowser/config.yaml` (all platforms) or `.nextbrowser.yaml` in c
 | `nextbrowser tier set <domain> <1\|2\|3>` | User override |
 | `nextbrowser agent install --host <id>` | Install skill (openclaw, claude, cursor, all, …) |
 | `nextbrowser agent doctor` | Verify CLI + paths for all agent hosts |
+| `nextbrowser exec <url> --js "..."` | **Inject JS** / automate (agents, OpenClaw) |
+| `nextbrowser exec <url> --steps-file steps.json` | Multi-step script file |
+| `nextbrowser browse <url>` | Browse with optional `--js`, `--action`, MLX |
 | `nextbrowser account add <id>` | Register isolated account profile |
-| `nextbrowser account run <id> "task"` | Run automation for one account |
+| `nextbrowser account run <id> "eval:..."` | Run task or JS for one account |
+| `nextbrowser multilogin profiles` | List MLX profile UUIDs |
+| `nextbrowser multilogin stop-all` | Stop all MLX launcher profiles |
 
 ## Four-layer stack (MVP)
 
@@ -123,7 +137,7 @@ nextbrowser agent install --host all
 nextbrowser agent doctor
 ```
 
-**[docs/AGENT_HOSTS.md](docs/AGENT_HOSTS.md)** · OpenClaw: **[docs/OPENCLAW.md](docs/OPENCLAW.md)** · `bash scripts/setup-agent.sh`
+**[docs/AGENT_QUICKSTART.md](docs/AGENT_QUICKSTART.md)** · **[docs/AGENT_HOSTS.md](docs/AGENT_HOSTS.md)** · OpenClaw: **[docs/OPENCLAW.md](docs/OPENCLAW.md)**
 
 ## Tests
 

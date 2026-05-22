@@ -1,7 +1,7 @@
 ---
 name: nextbrowser-harness
 description: Browser automation for AI agents — scrape, inject JS, Multilogin X profiles, Reddit/social flows. Use the nextbrowser CLI (OpenClaw, Claude Code, Cursor, Codex, shell).
-homepage: https://github.com/nextbrowser/harness
+homepage: https://github.com/sslprograms/nextbrowser-cli
 user-invocable: true
 metadata:
   {
@@ -21,7 +21,8 @@ Run **`nextbrowser`** (or `python -m nextbrowser_harness.cli`) with **`--json`**
 ## Install (once per machine)
 
 ```bash
-cd /path/to/stan-browser
+git clone https://github.com/sslprograms/nextbrowser-cli.git
+cd nextbrowser-cli
 python3 -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -e ".[playwright]"
 playwright install chromium

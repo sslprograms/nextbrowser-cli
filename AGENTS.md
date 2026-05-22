@@ -1,6 +1,8 @@
 # Agent instructions — Nextbrowser Harness
 
-This repo includes a browser automation CLI for AI coding agents. Prefer running commands over inventing browser code.
+Official CLI repo: [github.com/sslprograms/nextbrowser-cli](https://github.com/sslprograms/nextbrowser-cli)
+
+This project is the `nextbrowser` CLI (`nextbrowser-harness` package). Prefer running commands over inventing browser code.
 
 ## CLI (use this prefix)
 

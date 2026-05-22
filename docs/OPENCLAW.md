@@ -2,7 +2,7 @@
 
 > **Other agents (Claude Code, Cursor, Codex, …):** see **[AGENT_HOSTS.md](AGENT_HOSTS.md)** — use `nextbrowser agent install --host all`.
 
-OpenClaw loads **skills** from `SKILL.md` folders ([skills guide](https://openclawx.cloud/en/tools/skills)). This repo ships `skills/nextbrowser-harness/` for **darwin**, **linux**, and **win32**.
+OpenClaw loads **skills** from `SKILL.md` folders ([skills guide](https://openclawx.cloud/en/tools/skills)). The CLI lives at **[github.com/sslprograms/nextbrowser-cli](https://github.com/sslprograms/nextbrowser-cli)**; this repo ships `skills/nextbrowser-harness/` for **darwin**, **linux**, and **win32**.
 
 The agent runs shell commands — use the **`nextbrowser`** CLI (or `python3 -m nextbrowser_harness.cli` on all platforms).
 
@@ -13,7 +13,9 @@ The agent runs shell commands — use the **`nextbrowser`** CLI (or `python3 -m 
 ### Linux / macOS
 
 ```bash
-cd /path/to/stan-browser
+git clone https://github.com/sslprograms/nextbrowser-cli.git
+cd nextbrowser-cli
+# or: cd /path/to/your/local/clone
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -e .

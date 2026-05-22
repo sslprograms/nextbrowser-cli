@@ -6,9 +6,11 @@ This guide teaches **you** and **your agent** how to run browser automation (inc
 
 ## 1. One-time setup (your PC)
 
+Official repo: **[sslprograms/nextbrowser-cli](https://github.com/sslprograms/nextbrowser-cli)**
+
 ```powershell
-# Windows — adjust path to your clone
-cd C:\Users\jakek\Desktop\stan-browser
+# Windows — clone or use your existing copy
+cd C:\Users\jakek\Desktop\stan-browser   # or: cd nextbrowser-cli after git clone
 python -m venv .venv
 .venv\Scripts\activate
 pip install -e ".[playwright]"
