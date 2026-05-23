@@ -46,7 +46,17 @@ def repo_root() -> Path:
 
 
 def bundled_skill_dir() -> Path:
-    return repo_root() / "skills" / "nextbrowser-harness"
+    """Bundled AgentSkills folder (repo checkout or pip wheel skill_pack)."""
+    dev = repo_root() / "skills" / "nextbrowser-harness"
+    if dev.is_dir() and (dev / "SKILL.md").is_file():
+        return dev
+    pkg = Path(__file__).resolve().parent / "skill_pack" / "nextbrowser-harness"
+    if pkg.is_dir() and (pkg / "SKILL.md").is_file():
+        return pkg
+    raise FileNotFoundError(
+        "Bundled skill missing. Expected skills/nextbrowser-harness/SKILL.md in repo "
+        "or nextbrowser_harness/skill_pack/nextbrowser-harness/ in installed package."
+    )
 
 
 def resolve_openclaw_workspace() -> Path | None:

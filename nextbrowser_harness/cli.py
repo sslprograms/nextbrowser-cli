@@ -216,7 +216,7 @@ def main(argv: list[str] | None = None) -> int:
         cmd = args.agent_cmd
         if cmd == "list-hosts" or getattr(args, "list_hosts", False):
             for h in list_hosts():
-                print(f"{h.id:12} {h.name:16} {h.managed_skills_dir}")
+                print(f"{h.id:12} {h.name:16} {h.managed_skill_parent}")
             return 0
         if cmd == "doctor":
             report = doctor_report()

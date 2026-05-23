@@ -19,6 +19,8 @@ if [[ "$(uname -s)" == "Linux" ]]; then
   playwright install-deps chromium || true
 fi
 
+python scripts/sync_skill_pack.py
+
 nextbrowser agent install --host all --force
 nextbrowser agent doctor
 

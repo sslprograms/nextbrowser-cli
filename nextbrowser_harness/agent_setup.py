@@ -61,7 +61,7 @@ def install_for_host(
         if host_id == "project":
             dest_parent = Path.cwd() / "skills"
         else:
-            dest_parent = host.managed_skills_dir
+            dest_parent = host.managed_skill_parent
     return install_skill_to_dir(dest_parent, force=force)
 
 
@@ -98,6 +98,14 @@ def config_snippets() -> dict[str, object]:
             "comment": "Claude loads skills from ~/.claude/skills; set env in ~/.zshrc or use direnv",
             "paths": ["~/.claude/skills/nextbrowser-harness", ".claude/skills/nextbrowser-harness"],
         },
+        "hermes": {
+            "comment": "Hermes loads from ~/.hermes/skills/<category>/<skill>/",
+            "skill_path": "~/.hermes/skills/browser-automation/nextbrowser-harness",
+            "env_file": "~/.hermes/.env",
+            "slash_command": "/nextbrowser-harness",
+            "external_skill_dir": "Point Hermes at repo skills/ via config external skill directories",
+            "export": DEFAULT_ENV,
+        },
     }
 
 
@@ -105,17 +113,19 @@ def doctor_report() -> dict:
     st = platform_status()
     hosts = []
     for host in list_hosts():
-        managed = host.managed_skills_dir / SKILL_NAME
+        managed = host.managed_skill_parent / SKILL_NAME
         project = host.project_skills_dir(Path.cwd()) / SKILL_NAME
         hosts.append({
             "id": host.id,
             "name": host.name,
             "docs": host.docs_url,
+            "managed_skills_dir": str(host.managed_skill_parent),
             "managed_skill_path": str(managed),
-            "managed_installed": managed.is_dir(),
+            "managed_installed": managed.is_dir() and (managed / "SKILL.md").is_file(),
             "project_skill_path": str(project),
-            "project_installed": project.is_dir(),
+            "project_installed": project.is_dir() and (project / "SKILL.md").is_file(),
             "config_hint": host.config_hint,
+            "session_note": host.session_note,
         })
     st["agent_hosts"] = hosts
     st["config_snippets"] = config_snippets()

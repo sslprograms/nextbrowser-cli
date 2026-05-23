@@ -31,5 +31,8 @@ nextbrowser = "nextbrowser_harness.cli:main"
 where = ["."]
 include = ["nextbrowser_harness*"]
 
+[tool.setuptools.package-data]
+nextbrowser_harness = ["skill_pack/**/*"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]

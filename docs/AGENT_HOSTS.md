@@ -19,13 +19,17 @@ Legacy alias: `nextbrowser openclaw install` (= `--host openclaw`).
 
 | Host ID | Product | Skill location (managed) | Docs |
 |---------|---------|--------------------------|------|
+| `hermes` | Hermes Agent | `~/.hermes/skills/browser-automation/nextbrowser-harness/` | [Hermes skills](https://hermes-agent.nousresearch.com/docs/user-guide/features/skills) |
 | `openclaw` | OpenClaw | `~/.openclaw/skills/nextbrowser-harness/` | [OpenClaw skills](https://openclawx.cloud/en/tools/skills) |
 | `claude` | Claude Code | `~/.claude/skills/nextbrowser-harness/` | [Claude Code skills](https://code.claude.com/docs/en/skills) |
 | `cursor` | Cursor | `~/.cursor/skills/nextbrowser-harness/` | [Cursor docs](https://docs.cursor.com/) |
-| `codex` | OpenAI Codex / CLI | `~/.codex/skills/` | [AgentSkills](https://agentskills.io/) |
-| `gemini` | Gemini CLI | `~/.gemini/skills/` | [AgentSkills](https://agentskills.io/) |
-| `opencode` | OpenCode | `~/.config/opencode/skills/` | Host-specific |
-| `windsurf` | Windsurf / Cline | `~/.codeium/windsurf/skills/` | [Windsurf](https://docs.windsurf.com/) |
+| `continue` | Continue | `~/.continue/skills/nextbrowser-harness/` | [Continue](https://docs.continue.dev/) |
+| `roo` | Roo Code | `~/.roo/skills/nextbrowser-harness/` | [Roo Code](https://docs.roocode.com/) |
+| `codex` | OpenAI Codex / CLI | `~/.codex/skills/nextbrowser-harness/` | [AgentSkills](https://agentskills.io/) |
+| `gemini` | Gemini CLI | `~/.gemini/skills/nextbrowser-harness/` | [AgentSkills](https://agentskills.io/) |
+| `opencode` | OpenCode | `~/.config/opencode/skills/nextbrowser-harness/` | Host-specific |
+| `kilocode` | Kilo Code | `~/.kilocode/skills/nextbrowser-harness/` | [Kilo Code](https://kilocode.ai/docs/) |
+| `windsurf` | Windsurf / Cline | `~/.codeium/windsurf/skills/nextbrowser-harness/` | [Windsurf](https://docs.windsurf.com/) |
 | `project` | Any (repo-local) | `./skills/nextbrowser-harness/` | Portable in git |
 
 Project-local install (shared via git):
@@ -53,6 +57,24 @@ nextbrowser agent doctor
 ---
 
 ## Per-host configuration
+
+### Hermes Agent
+
+Install: `nextbrowser agent install --host hermes`
+
+Skill path: `~/.hermes/skills/browser-automation/nextbrowser-harness/` (Hermes category layout).
+
+Set env in `~/.hermes/.env` or run `hermes setup`:
+
+```bash
+export NEXTBROWSER_USE_CASE=scrape
+export NEXTBROWSER_AUTOMATION=playwright
+nextbrowser init --env
+```
+
+Use slash command `/nextbrowser-harness` or preload: `hermes --skills nextbrowser-harness`.
+
+You can also add the repo `skills/` folder as an [external skill directory](https://hermes-agent.nousresearch.com/docs/user-guide/features/skills).
 
 ### OpenClaw
 

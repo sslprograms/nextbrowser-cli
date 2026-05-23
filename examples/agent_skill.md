@@ -1,45 +1,35 @@
-# Nextbrowser Harness — Agent Skill Snippet (Linux / macOS / Windows)
+# Nextbrowser Harness — Agent Skill Snippet
 
-Install once, then the agent can drive the harness via CLI (JSON-friendly).
+AgentSkills-compatible skill: `skills/nextbrowser-harness/SKILL.md`
 
-For OpenClaw, prefer the bundled skill: `nextbrowser openclaw install` (see docs/OPENCLAW.md).
-
-## Install
+Install for your host:
 
 ```bash
-pip install -e /path/to/stan-browser
-pip install -e "/path/to/stan-browser[playwright]"
-playwright install chromium
+nextbrowser agent install --host hermes --force    # ~/.hermes/skills/browser-automation/...
+nextbrowser agent install --host openclaw --force
+nextbrowser agent install --host all --force
+nextbrowser agent doctor
 ```
 
-## Bootstrap (60s headless)
+**Policy:** Use `nextbrowser exec` / `browse` / `scrape` — do not write standalone Playwright Python.
+
+## Bootstrap
 
 ```bash
+pip install -e ".[playwright]"
+playwright install chromium
 export NEXTBROWSER_USE_CASE=scrape
-export NEXTBROWSER_PROXY=nodemaven
-export NODEMAVEN_PROXY_HOST=gate.nodemaven.com:8080
-export NODEMAVEN_PROXY_USER=...
-export NODEMAVEN_PROXY_PASSWORD=...
+export NEXTBROWSER_AUTOMATION=playwright
 nextbrowser init --env
 ```
 
-## Scrape
+## Examples
 
 ```bash
-nextbrowser scrape "https://example.com/page" --json
-nextbrowser tier lookup "https://reddit.com/r/test"
+nextbrowser status
+nextbrowser scrape "https://example.com"
+nextbrowser exec "https://example.com" --js "document.title"
+nextbrowser exec "https://www.reddit.com" --steps-file examples/steps-reddit.json
 ```
 
-## Multi-account
-
-```bash
-nextbrowser account add social_01 --notes "Twitter portfolio"
-nextbrowser account run social_01 "Check inbox and summarize unread DMs" --url https://...
-```
-
-## Use case selection
-
-- `scrape` — tiered web scraping, cost-efficient by default
-- `accounts` — persistent profiles, sticky IPs, parallel account orchestration
-
-LLM: uses the host agent's configured model; no extra API key step at install.
+See `docs/AGENT_QUICKSTART.md` for full host setup (Hermes, OpenClaw, Claude, Cursor).

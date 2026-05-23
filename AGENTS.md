@@ -6,6 +6,8 @@ This project is the `nextbrowser` CLI (`nextbrowser-harness` package).
 
 **Navigation policy:** Use `nextbrowser exec` / `browse` / `scrape` — never generate standalone Playwright Python unless the user explicitly requests it. Run `nextbrowser status` and follow `agent_navigation` in the JSON.
 
+Install skill: `nextbrowser agent install --host all --force` (Hermes, OpenClaw, Claude, Cursor, Continue, Roo, …). Validate: `nextbrowser agent doctor`.
+
 ## CLI (use this prefix)
 
 Run `nextbrowser status` and use the `platform.cli` value from JSON (e.g. `nextbrowser` or `python3 -m nextbrowser_harness.cli`).

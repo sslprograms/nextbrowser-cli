@@ -2,6 +2,7 @@
 Known agent hosts that load AgentSkills-compatible SKILL.md folders.
 
 Spec: https://agentskills.io/
+Hermes: https://hermes-agent.nousresearch.com/docs/user-guide/features/skills
 """
 
 from __future__ import annotations
@@ -22,6 +23,13 @@ class AgentHost:
     project_skills_dir: Callable[[Path], Path]
     config_hint: str
     session_note: str
+    managed_subpath: str | None = None
+
+    @property
+    def managed_skill_parent(self) -> Path:
+        if self.managed_subpath:
+            return self.managed_skills_dir / self.managed_subpath
+        return self.managed_skills_dir
 
 
 def _host(
@@ -32,6 +40,8 @@ def _host(
     project_parts: tuple[str, ...],
     config_hint: str,
     session_note: str,
+    *,
+    managed_subpath: str | None = None,
 ) -> AgentHost:
     return AgentHost(
         id=id,
@@ -41,11 +51,22 @@ def _host(
         project_skills_dir=lambda ws, parts=project_parts: ws.joinpath(*parts),
         config_hint=config_hint,
         session_note=session_note,
+        managed_subpath=managed_subpath,
     )
 
 
 # Registry of hosts similar to OpenClaw (CLI + SKILL.md + shell exec)
 AGENT_HOSTS: dict[str, AgentHost] = {
+    "hermes": _host(
+        "hermes",
+        "Hermes Agent",
+        "https://hermes-agent.nousresearch.com/docs/user-guide/features/skills",
+        ".hermes/skills",
+        (".hermes", "skills", "browser-automation"),
+        "~/.hermes/.env or hermes setup — export NEXTBROWSER_*; or point external skill dir at repo skills/",
+        "New Hermes session after install; slash command /nextbrowser-harness or hermes --skills nextbrowser-harness",
+        managed_subpath="browser-automation",
+    ),
     "openclaw": _host(
         "openclaw",
         "OpenClaw",
@@ -100,6 +121,24 @@ AGENT_HOSTS: dict[str, AgentHost] = {
         "Cursor Settings → Rules, or project .cursor/skills/; env via .env or MCP host",
         "Reload Cursor window after adding skill.",
     ),
+    "continue": _host(
+        "continue",
+        "Continue",
+        "https://docs.continue.dev/",
+        ".continue/skills",
+        (".continue", "skills"),
+        "Continue config.yaml or ~/.continue/.env for NEXTBROWSER_*",
+        "Reload Continue after install.",
+    ),
+    "roo": _host(
+        "roo",
+        "Roo Code",
+        "https://docs.roocode.com/",
+        ".roo/skills",
+        (".roo", "skills"),
+        "Roo settings or project .roo/skills/; export NEXTBROWSER_* in shell",
+        "Reload VS Code window after install.",
+    ),
     "windsurf": _host(
         "windsurf",
         "Windsurf / Cline",
@@ -107,6 +146,15 @@ AGENT_HOSTS: dict[str, AgentHost] = {
         ".codeium/windsurf/skills",
         (".windsurf", "skills"),
         "May use .windsurf/skills or global; check Windsurf skills docs",
+        "Reload IDE after install.",
+    ),
+    "kilocode": _host(
+        "kilocode",
+        "Kilo Code",
+        "https://kilocode.ai/docs/",
+        ".kilocode/skills",
+        (".kilocode", "skills"),
+        "Export NEXTBROWSER_* in shell or project .env",
         "Reload IDE after install.",
     ),
     "project": _host(
@@ -136,7 +184,13 @@ def list_hosts() -> list[AgentHost]:
 
 def get_host(host_id: str) -> AgentHost:
     key = host_id.lower().replace("_", "-")
-    aliases = {"claude-code": "claude", "open-claw": "openclaw"}
+    aliases = {
+        "claude-code": "claude",
+        "open-claw": "openclaw",
+        "hermes-agent": "hermes",
+        "cline": "windsurf",
+        "kilo": "kilocode",
+    }
     key = aliases.get(key, key)
     if key not in AGENT_HOSTS:
         ids = ", ".join(sorted(h.id for h in list_hosts()))

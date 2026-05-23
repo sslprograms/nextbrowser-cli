@@ -49,3 +49,12 @@ def test_list_hosts_includes_claude():
     assert "openclaw" in ids
     assert "claude" in ids
     assert "cursor" in ids
+    assert "hermes" in ids
+
+
+def test_hermes_managed_subpath():
+    from nextbrowser_harness.agent_hosts import get_host
+
+    host = get_host("hermes")
+    assert host.managed_subpath == "browser-automation"
+    assert host.managed_skill_parent.name == "browser-automation"

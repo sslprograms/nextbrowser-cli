@@ -15,6 +15,8 @@ pip install -e .
 pip install -e ".[playwright]"
 playwright install chromium
 
+python scripts/sync_skill_pack.py
+
 nextbrowser agent install --host all --force
 nextbrowser agent doctor
 

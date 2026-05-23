@@ -27,8 +27,29 @@ Verify:
 
 ```bash
 nextbrowser status
+nextbrowser agent install --host all --force
 nextbrowser agent doctor
 ```
+
+---
+
+## 2a. Hermes Agent
+
+```bash
+nextbrowser agent install --host hermes --force
+```
+
+Skill path: `~/.hermes/skills/browser-automation/nextbrowser-harness/` (or `%USERPROFILE%\.hermes\...` on Windows).
+
+Set env in `~/.hermes/.env`:
+
+```bash
+export NEXTBROWSER_USE_CASE=scrape
+export NEXTBROWSER_AUTOMATION=playwright
+nextbrowser init --env
+```
+
+Use `/nextbrowser-harness` in chat or: `hermes --skills nextbrowser-harness`.
 
 ---
 

@@ -48,7 +48,7 @@ Config: `~/.nextbrowser/config.yaml` (all platforms) or `.nextbrowser.yaml` in c
 | `nextbrowser scrape <url> --tier 2` | Force tier |
 | `nextbrowser tier lookup <url>` | Show recommended tier |
 | `nextbrowser tier set <domain> <1\|2\|3>` | User override |
-| `nextbrowser agent install --host <id>` | Install skill (openclaw, claude, cursor, all, …) |
+| `nextbrowser agent install --host <id>` | Install skill (hermes, openclaw, claude, cursor, all, …) |
 | `nextbrowser agent doctor` | Verify CLI + paths for all agent hosts |
 | `nextbrowser exec <url> --js "..."` | **Inject JS** / automate (agents, OpenClaw) |
 | `nextbrowser exec <url> --steps-file steps.json` | Multi-step script file |
@@ -129,13 +129,15 @@ nextbrowser multilogin stop <profile-uuid>
 
 With `browser: multilogin` in config, tier 2/3 scraping and `account run` launch MLX profiles and attach Playwright over CDP (`automation_type=playwright`).
 
-## AI agents (OpenClaw, Claude Code, Cursor, Codex, …)
+## AI agents (Hermes, OpenClaw, Claude Code, Cursor, Continue, Roo, …)
 
 ```bash
 nextbrowser agent list-hosts
-nextbrowser agent install --host all
+nextbrowser agent install --host all --force
 nextbrowser agent doctor
 ```
+
+Skills follow the [AgentSkills](https://agentskills.io/) format (`SKILL.md` + YAML frontmatter). Hermes uses category layout: `~/.hermes/skills/browser-automation/nextbrowser-harness/`.
 
 **[docs/AGENT_QUICKSTART.md](docs/AGENT_QUICKSTART.md)** · **[docs/AGENT_HOSTS.md](docs/AGENT_HOSTS.md)** · OpenClaw: **[docs/OPENCLAW.md](docs/OPENCLAW.md)**
 
