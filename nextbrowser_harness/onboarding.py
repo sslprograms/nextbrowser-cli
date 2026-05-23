@@ -90,8 +90,31 @@ def onboard_from_env() -> HarnessConfig:
         cfg.custom_proxies = [
             p.strip() for p in os.getenv("NEXTBROWSER_CUSTOM_PROXIES", "").split(",") if p.strip()
         ]
+    _apply_multilogin_env(cfg)
     cfg.save()
     return cfg
+
+
+def _apply_multilogin_env(cfg: HarnessConfig) -> None:
+    """Persist MLX folder/profile UUIDs from env into config for agents."""
+    folder = os.getenv("MULTILOGIN_FOLDER_ID", "").strip()
+    default_profile = os.getenv("MULTILOGIN_PROFILE_ID", "").strip()
+    profiles: dict[str, str] = {}
+    for key, val in os.environ.items():
+        if not key.startswith("MULTILOGIN_PROFILE_") or key == "MULTILOGIN_PROFILE_ID":
+            continue
+        if not val.strip():
+            continue
+        account_key = key[len("MULTILOGIN_PROFILE_") :].lower()
+        profiles[account_key] = val.strip()
+    if folder or default_profile or profiles:
+        cfg.multilogin = {
+            "folder_id": folder,
+            "default_profile_id": default_profile,
+            "profiles": profiles,
+        }
+    if os.getenv("NEXTBROWSER_BROWSER", "").strip().lower() == "multilogin":
+        cfg.browser = "multilogin"  # type: ignore[assignment]
 
 
 def _print_summary(cfg: HarnessConfig) -> None:

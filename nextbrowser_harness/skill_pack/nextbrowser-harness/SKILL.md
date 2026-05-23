@@ -114,16 +114,37 @@ nextbrowser tier lookup "https://reddit.com"
 
 ### 5. Multilogin X (optional)
 
-Start the MLX desktop app, then:
+**Agents:** follow [references/multilogin.md](references/multilogin.md) — do **not** patch `multilogin_tokens.yaml`.
 
-```bash
-nextbrowser multilogin signin
-nextbrowser multilogin automation-token
-nextbrowser multilogin profiles --folder-id $MULTILOGIN_FOLDER_ID
-nextbrowser exec "https://www.reddit.com" --browser multilogin --profile reddit_default --steps-file examples/steps-reddit.json
+**Windows (recommended):**
+
+```powershell
+.\scripts\setup-multilogin.ps1
+nextbrowser multilogin doctor
 ```
 
-See [references/multilogin.md](references/multilogin.md).
+**Linux / macOS (recommended):**
+
+```bash
+chmod +x scripts/setup-multilogin.sh
+./scripts/setup-multilogin.sh
+nextbrowser multilogin doctor
+```
+
+```bash
+nextbrowser multilogin setup
+nextbrowser multilogin signin
+nextbrowser multilogin automation-token
+nextbrowser multilogin print-env    # add lines to .env
+nextbrowser init --env
+nextbrowser multilogin doctor
+```
+
+**Run with MLX profile** (needs `MULTILOGIN_PROFILE_REDDIT_DEFAULT` when using `--profile reddit_default`):
+
+```bash
+nextbrowser exec "https://www.reddit.com" --browser multilogin --profile reddit_default --tier 3
+```
 
 ### 6. Host install
 
@@ -154,7 +175,9 @@ Use `--action` flags or a JSON `actions` array in a steps file.
 - **`nextbrowser` not found** — use full `platform.cli` from `nextbrowser status`
 - **Do not invent Playwright Python** — use `exec` / `browse` / `--js` / `--steps-file`
 - **Account run fails** — set `NEXTBROWSER_AUTOMATION=playwright`
-- **MLX signin 400** — harness MD5-hashes password; use MLX app credentials
+- **MLX signin 400** — harness MD5-hashes password; use MLX app credentials; run `multilogin signin`, never edit token YAML
+- **MLX doctor fails** — start desktop app; run `nextbrowser multilogin setup`; Windows: `.\scripts\setup-multilogin.ps1`
+- **exec --profile reddit_default fails** — set `MULTILOGIN_PROFILE_REDDIT_DEFAULT` to the profile UUID
 - **PROFILE_ALREADY_RUNNING** — harness reuses CDP port; or `nextbrowser multilogin stop-all`
 - **Reddit success:false** — captcha heuristics may fire while partial actions still ran
 - **Sandboxed agent** — Python + Playwright must exist **inside** the sandbox, not only on host

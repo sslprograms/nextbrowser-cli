@@ -106,6 +106,8 @@ def main(argv: list[str] | None = None) -> int:
     p_mlx_profiles.add_argument("--search", default="", help="search_text (empty = all)")
     mlx_sub.add_parser("stop-all", help="Stop all running MLX profiles (launcher)")
     mlx_sub.add_parser("doctor", help="Check MLX launcher, token, folder/profile env")
+    mlx_sub.add_parser("print-env", help="Print .env lines for MLX (no secrets)")
+    p_mlx_setup = mlx_sub.add_parser("setup", help="How to configure MLX (platform-specific)")
     p_mlx_start = mlx_sub.add_parser("start", help="Start profile (launcher must be running)")
     p_mlx_start.add_argument("profile_id", help="Multilogin profile UUID")
     p_mlx_start.add_argument("--folder-id", default=None)
@@ -272,36 +274,46 @@ def main(argv: list[str] | None = None) -> int:
             print(f"Automation token saved ({len(token)} chars)")
             return 0
         if args.mlx_cmd == "doctor":
-            import os
-            import requests as req
+            from nextbrowser_harness.integrations.multilogin.doctor import mlx_doctor_report
 
-            report = {
-                "launcher_url": os.getenv("MULTILOGIN_LAUNCHER_URL", "https://launcher.mlx.yt:45001"),
-                "launcher_reachable": False,
-                "token_set": bool(
-                    os.getenv("MULTILOGIN_AUTOMATION_TOKEN")
-                    or os.getenv("MULTILOGIN_TOKEN")
-                    or getattr(client, "_token", None)
-                ),
-                "email_set": bool(os.getenv("MULTILOGIN_EMAIL")),
-                "folder_id": os.getenv("MULTILOGIN_FOLDER_ID", ""),
-                "profile_id": os.getenv("MULTILOGIN_PROFILE_ID", ""),
-            }
-            try:
-                r = req.get(report["launcher_url"], timeout=5)
-                report["launcher_reachable"] = r.status_code < 500
-                report["launcher_status"] = r.status_code
-            except Exception as e:
-                report["launcher_error"] = str(e)
-            try:
-                client.ensure_token()
-                report["api_token_ok"] = True
-            except Exception as e:
-                report["api_token_ok"] = False
-                report["api_error"] = str(e)
+            report = mlx_doctor_report(client)
             print(json.dumps(report, indent=2))
-            ok = report.get("launcher_reachable") and report.get("api_token_ok") and report["folder_id"] and report["profile_id"]
-            return 0 if ok else 1
+            if report.get("next_steps"):
+                print("\nNext steps:")
+                for i, step in enumerate(report["next_steps"], 1):
+                    print(f"  {i}. {step}")
+            return 0 if report.get("ok") else 1
+        if args.mlx_cmd == "print-env":
+            from nextbrowser_harness.integrations.multilogin.doctor import mlx_print_env_snippet
+
+            print(mlx_print_env_snippet())
+            return 0
+        if args.mlx_cmd == "setup":
+            from nextbrowser_harness.integrations.multilogin.platform_hints import (
+                mlx_setup_script_hint,
+                mlx_setup_script_path,
+                mlx_start_desktop_hint,
+            )
+            import platform
+
+            sysname = platform.system().lower()
+            script = mlx_setup_script_path()
+            print(f"Platform: {sysname}")
+            print(f"Guided setup: {mlx_setup_script_hint()}")
+            if not script.is_file():
+                print(f"  (script missing at {script})")
+            print(f"\n{mlx_start_desktop_hint()}")
+            if sysname != "windows":
+                print("\nManual CLI flow:")
+                print("  nextbrowser multilogin signin")
+                print("  nextbrowser multilogin automation-token")
+                print("  nextbrowser multilogin folders")
+                print("  nextbrowser multilogin profiles --folder-id <folder-uuid>")
+                print("  nextbrowser multilogin print-env   # add to .env")
+                print("  nextbrowser init --env")
+                print("  nextbrowser multilogin doctor")
+            print("\nAgents: do NOT edit ~/.nextbrowser/multilogin_tokens.yaml manually.")
+            return 0
         if args.mlx_cmd == "folders":
             folders = client.list_folders()
             print(json.dumps(folders, indent=2))

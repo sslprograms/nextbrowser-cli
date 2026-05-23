@@ -15,6 +15,8 @@ if ($LASTEXITCODE -ne 0) {
     Write-Host "  3. MULTILOGIN_FOLDER_ID + MULTILOGIN_PROFILE_ID"
     Write-Host ""
     Write-Host "Setup:"
+    Write-Host "  .\scripts\setup-multilogin.ps1"
+    Write-Host "  # or manually:"
     Write-Host "  nextbrowser multilogin signin"
     Write-Host "  nextbrowser multilogin automation-token"
     Write-Host "  nextbrowser multilogin folders"

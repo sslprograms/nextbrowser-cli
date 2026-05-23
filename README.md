@@ -113,6 +113,24 @@ Uses the [Multilogin X API](https://documenter.getpostman.com/view/28533318/2s94
    - `nextbrowser multilogin signin` then `nextbrowser multilogin automation-token`
 3. **Profile UUIDs** — `MULTILOGIN_FOLDER_ID` + `MULTILOGIN_PROFILE_ID` (or per-account `MULTILOGIN_PROFILE_<ACCOUNT>`)
 
+**Windows — guided setup (recommended):**
+
+```powershell
+.\scripts\setup-multilogin.ps1
+```
+
+**Linux / macOS:**
+
+```bash
+chmod +x scripts/setup-multilogin.sh && ./scripts/setup-multilogin.sh
+```
+
+Or run the guided setup script for your OS (see `nextbrowser multilogin setup`).
+
+This starts the MLX app, signs in, fetches the automation token, lets you pick folder/profile, and writes `.env` with `NEXTBROWSER_BROWSER=multilogin`.
+
+Manual CLI:
+
 ```powershell
 nextbrowser multilogin signin
 nextbrowser multilogin automation-token

@@ -110,6 +110,9 @@ class MultiloginXClient:
             or data.get("token")
         )
         self._refresh_token = data.get("refresh_token")
+        saved_email = data.get("email")
+        if saved_email and not os.getenv("MULTILOGIN_EMAIL"):
+            os.environ.setdefault("MULTILOGIN_EMAIL", str(saved_email))
 
     def save_tokens(
         self,
@@ -117,6 +120,7 @@ class MultiloginXClient:
         token: str | None = None,
         refresh_token: str | None = None,
         automation_token: str | None = None,
+        email: str | None = None,
     ) -> None:
         existing = {}
         if self.token_path.exists():
@@ -130,6 +134,8 @@ class MultiloginXClient:
         if automation_token:
             existing["automation_token"] = automation_token
             self._token = automation_token
+        if email:
+            existing["email"] = email.strip()
         self.token_path.parent.mkdir(parents=True, exist_ok=True)
         self.token_path.write_text(yaml.safe_dump(existing, sort_keys=False), encoding="utf-8")
 
@@ -218,7 +224,7 @@ class MultiloginXClient:
         token = block.get("token")
         if not token:
             raise MultiloginXError(f"signin failed: {data}")
-        self.save_tokens(token=token, refresh_token=block.get("refresh_token"))
+        self.save_tokens(token=token, refresh_token=block.get("refresh_token"), email=email)
         return token
 
     def refresh(self, refresh_token: str | None = None, *, email: str | None = None) -> str:
@@ -227,6 +233,9 @@ class MultiloginXClient:
             raise MultiloginXError("No refresh_token available")
         body: dict[str, str] = {"refresh_token": rt}
         em = (email or os.getenv("MULTILOGIN_EMAIL") or "").strip()
+        if not em and self.token_path.exists():
+            data_file = yaml.safe_load(self.token_path.read_text(encoding="utf-8")) or {}
+            em = (data_file.get("email") or "").strip()
         if em:
             body["email"] = em
         data = self._request(

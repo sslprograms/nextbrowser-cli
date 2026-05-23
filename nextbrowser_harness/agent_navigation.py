@@ -30,7 +30,11 @@ def agent_command_recipes() -> dict:
         "navigate": "{cli} exec \"<url>\" --steps-file examples/steps-reddit.json",
         "inject_js": "{cli} exec \"<url>\" --js \"document.title\"",
         "click_fill": "{cli} exec \"<url>\" --action \"fill:#id|value\" --action \"click:button.submit\"",
-        "mlx": "{cli} exec \"<url>\" --browser multilogin --profile <key>",
+        "mlx": "{cli} multilogin doctor && {cli} exec \"<url>\" --browser multilogin --profile reddit_default",
+        "mlx_setup_windows": ".\\scripts\\setup-multilogin.ps1",
+        "mlx_setup_unix": "./scripts/setup-multilogin.sh",
+        "mlx_setup": "{cli} multilogin setup",
+        "mlx_forbidden": "Do not edit ~/.nextbrowser/multilogin_tokens.yaml by hand",
         "steps_format": {
             "url": "https://example.com",
             "actions": ["goto", "wait:2000", "title", "eval:document.title", "final_url"],

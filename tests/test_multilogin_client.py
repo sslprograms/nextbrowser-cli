@@ -2,6 +2,7 @@ import hashlib
 from unittest.mock import MagicMock, patch
 
 import pytest
+import yaml
 
 from nextbrowser_harness.integrations.multilogin.client import (
     MultiloginXClient,
@@ -42,6 +43,8 @@ def test_signin_saves_token(tmp_path):
 
     assert token == "abc"
     assert (tmp_path / "tokens.yaml").exists()
+    saved = yaml.safe_load((tmp_path / "tokens.yaml").read_text(encoding="utf-8"))
+    assert saved.get("email") == "u@x.com"
     body = req.call_args.kwargs.get("json") or req.call_args[1].get("json")
     assert body["password"] == hashlib.md5(b"pass").hexdigest()
 
