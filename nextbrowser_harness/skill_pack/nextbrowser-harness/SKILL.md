@@ -44,12 +44,6 @@ metadata:
       - claude-code
       - codex
       - opencode
-required_environment_variables:
-  - name: NEXTBROWSER_AUTOMATION
-    default: playwright
-    prompt: Automation backend for browser exec
-    help: Use playwright for JS injection without a separate LLM API key
-    required_for: exec, browse, and account run
 ---
 
 # Nextbrowser Harness
@@ -82,7 +76,7 @@ nextbrowser init --env
 nextbrowser agent install --host all --force
 ```
 
-Set `NEXTBROWSER_AUTOMATION=playwright` (recommended).
+`init --env` sets `NEXTBROWSER_AUTOMATION=playwright` automatically — no API key or secret prompt needed.
 
 ### 3. Navigate (browser + actions)
 

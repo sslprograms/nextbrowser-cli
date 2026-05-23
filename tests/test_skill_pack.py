@@ -53,6 +53,12 @@ def test_skill_openclaw_metadata():
     assert "nextbrowser" in openclaw.get("requires", {}).get("anyBins", [])
 
 
+def test_skill_no_secret_env_prompts():
+    """Hermes treats required_environment_variables as hidden secrets — only use for API keys."""
+    meta = load_skill_frontmatter()
+    assert "required_environment_variables" not in meta
+
+
 def test_skill_pack_matches_repo():
     """skill_pack copy stays in sync with skills/ (for pip installs)."""
     from nextbrowser_harness.platform_paths import repo_root
