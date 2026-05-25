@@ -10,11 +10,21 @@ def test_action_spec_eval():
     assert s.expression == "return 1+1"
 
 
-def test_action_spec_fill():
+def test_action_spec_fill_delegates_to_type():
     s = ActionSpec.parse("fill:#email|a@b.com")
-    assert s.type == "fill"
-    assert s.selector == "#email"
+    assert s.type == "type"
+    assert s.selectors == ["#email"]
     assert s.value == "a@b.com"
+
+
+def test_action_spec_type_and_deep_click():
+    t = ActionSpec.parse("type:#login-username|myuser")
+    assert t.type == "type"
+    assert t.selectors == ["#login-username"]
+    assert t.value == "myuser"
+    c = ActionSpec.parse("deep-click:shreddit-post >> button:has(svg[icon-name='upvote'])")
+    assert c.type == "click"
+    assert "shreddit-post" in c.primary_selector()
 
 
 def test_steps_file():

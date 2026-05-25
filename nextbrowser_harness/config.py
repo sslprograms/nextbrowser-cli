@@ -12,6 +12,7 @@ BrowserChoice = Literal["native", "multilogin", "gologin", "octo"]
 ProxyChoice = Literal["none", "nodemaven", "custom"]
 AutomationChoice = Literal["browser_use", "playwright", "custom"]
 DriverChoice = Literal["undetected", "playwright"]
+ElementSearchChoice = Literal["playwright", "indexed"]
 TierLevel = Literal[1, 2, 3]
 
 CONFIG_ENV = "NEXTBROWSER_CONFIG"
@@ -27,6 +28,7 @@ class HarnessConfig:
     proxy: ProxyChoice = "none"
     driver: DriverChoice = "undetected"
     automation: AutomationChoice = "playwright"
+    element_search: str = ""  # empty = indexed (agent map); playwright = CSS only
     headless: bool = True
     captcha_enabled: bool = False
     captcha_provider: str | None = None

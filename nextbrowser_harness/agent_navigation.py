@@ -29,7 +29,9 @@ def agent_command_recipes() -> dict:
         "read_page": "{cli} scrape \"<url>\" --json",
         "navigate": "{cli} exec \"<url>\" --steps-file examples/steps-reddit.json",
         "inject_js": "{cli} exec \"<url>\" --js \"document.title\"",
-        "click_fill": "{cli} exec \"<url>\" --action \"fill:#id|value\" --action \"click:button.submit\"",
+        "click_fill": "{cli} exec \"<url>\" --element-search indexed --action state --action \"type:INDEX|value\" --action \"click:INDEX\"",
+        "reddit_login": '{cli} exec "https://www.reddit.com" --recipe reddit.com/login --var username=USER --var password=PASS',
+        "indexed_flow": "{cli} exec \"<url>\" --element-search indexed --action goto --action state --action \"click:5\"",
         "mlx": "{cli} multilogin doctor && {cli} exec \"<url>\" --browser multilogin --profile reddit_default",
         "mlx_setup_windows": ".\\scripts\\setup-multilogin.ps1",
         "mlx_setup_unix": "./scripts/setup-multilogin.sh",
@@ -47,5 +49,10 @@ def agent_command_recipes() -> dict:
             "url": "https://example.com",
             "actions": ["goto", "wait:2000", "title", "eval:document.title", "final_url"],
         },
-        "action_prefixes": ["eval:", "jsfile:", "click:", "fill:", "wait:", "goto"],
+        "action_prefixes": [
+            "state", "find:", "type:", "fill:", "click:", "deep-click:", "wait-for:",
+            "wait-for-nav:", "wait-for-text:", "eval:", "jsfile:", "goto", "key:",
+        ],
+        "element_search": "indexed mode: run `state`, read [N] labels, then click:N and type:N|value (no CSS guessing)",
+        "recipes": "{cli} recipes list && {cli} exec \"<url>\" --recipe site.com/flow --var key=val",
     }

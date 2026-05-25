@@ -63,6 +63,7 @@ When the user describes a multi-step browser task (login, search, click, comment
 
 1. **Do not** write standalone Playwright/Python — use `nextbrowser exec` only.
 2. **Translate** each user step into `--action` flags or a JSON steps file, then run one command.
+3. **Modern sites (Reddit, SPAs, shadow DOM):** use `--element-search indexed` (default) — run `state`, read numbered `[N]` elements, then `click:N` / `type:N|value`. Same *workflow* as browser-use; **no browser-use package required**.
 3. **MLX / Multilogin:** before first `exec --browser multilogin`, run `multilogin doctor`; if launcher fails on Linux, run `multilogin fix-linux-launcher`.
 4. **Native anti-detect:** default driver is undetected Chrome (`NEXTBROWSER_DRIVER=undetected`); use `--browser native --tier 3`.
 5. **Report** the JSON result (`success`, `actions`, `error`) back to the user.
@@ -70,15 +71,18 @@ When the user describes a multi-step browser task (login, search, click, comment
 Example — user says: open site, wait, click login, fill email/password, submit:
 
 ```bash
-nextbrowser exec "https://example.com" --tier 3 --browser multilogin --profile default \
-  --action "goto" \
-  --action "wait:2000" \
-  --action "click:button.login" \
-  --action "fill:#email|user@example.com" \
-  --action "fill:#password|SECRET_FROM_USER_ENV" \
-  --action "click:button[type=submit]" \
-  --action "wait_load" \
-  --action "final_url"
+pip install -e ".[playwright,undetected]"
+python -m nextbrowser_harness.cli exec "https://www.reddit.com/login" --tier 3 --browser multilogin \
+  --element-search indexed \
+  --action goto --action state --action "type:12|USER" --action "type:15|PASS" --action "click:20"
+```
+
+(Indices **12**, **15**, **20** are examples — always copy real indices from the `state` action output.)
+
+CSS fallback (`--element-search playwright` or default on plain Playwright launch):
+
+```bash
+nextbrowser exec "https://example.com" --tier 3 --action goto --action "type:#email|user@example.com"
 ```
 
 Prefer a steps file for long flows:
@@ -86,7 +90,7 @@ Prefer a steps file for long flows:
 ```json
 {
   "url": "https://example.com",
-  "actions": ["goto", "wait:2000", "click:...", "fill:...|...", "final_url"]
+  "actions": ["goto", "wait-for:#email", "type:#email|user@test.com", "click:button.submit", "final_url"]
 }
 ```
 
@@ -133,7 +137,15 @@ nextbrowser exec "https://www.reddit.com" --steps-file examples/steps-reddit.jso
 **Actions on CLI:**
 
 ```bash
-nextbrowser exec "https://shop.com" --action "fill:#email|user@test.com" --action "click:button.submit"
+nextbrowser exec "https://shop.com" --action "type:#email|user@test.com" --action "click:button.submit"
+```
+
+**Site recipes (Reddit login, upvote, …):**
+
+```bash
+nextbrowser recipes
+nextbrowser exec "https://www.reddit.com" --recipe reddit.com/login \
+  --var username=USER --var password=PASS --browser multilogin --tier 3
 ```
 
 **Browse shortcut** (Reddit-oriented defaults):
@@ -217,23 +229,38 @@ Full command reference: [references/commands.md](references/commands.md).
 
 ## Action syntax
 
+### Indexed mode (`--element-search indexed`, default)
+
+Numbered interactive elements for the agent (built into the harness):
+
 | Kind | Example |
 |------|---------|
-| JS one-liner | `eval:document.title` |
-| JS file | `jsfile:./my-script.js` |
-| Click | `click:button[type=submit]` |
-| Fill | `fill:#email\|user@test.com` |
-| Wait ms | `wait:3000` |
-| Built-in | `goto`, `wait_load`, `title`, `scroll`, `reddit_feed_check`, `final_url` |
+| List elements | `state` — returns numbered interactive elements in JSON `detail` |
+| Find index | `find:Sign in` — returns matching indices |
+| Click | `click:5` or `click:@5` |
+| Type | `type:3\|mypassword` |
+| Wait for index | `wait-for:12` |
+| Navigation / JS | `goto`, `eval:...`, `wait_load`, `title`, `final_url` |
 
-Use `--action` flags or a JSON `actions` array in a steps file.
+### Playwright CSS mode (default on non-CDP launch)
+
+| Kind | Example |
+|------|---------|
+| Type / fill | `type:#email\|user@test.com` (keyboard; works on web components) |
+| Click | `click:button.submit` or `deep-click:host >> button` |
+| Wait | `wait-for:#id`, `wait-for-nav:`, `wait-for-text:OK` |
+
+Use `--action` flags, `--steps-file`, or `--recipe site.com/flow`.
 
 ## Pitfalls
 
 - **`nextbrowser` not found** — use full `platform.cli` from `nextbrowser status`
 - **Do not invent Playwright Python** — use `exec` / `browse` / `--js` / `--steps-file`
 - **Account run fails** — set `NEXTBROWSER_AUTOMATION=playwright`
-- **MLX signin 400** — harness MD5-hashes password; use MLX app credentials; run `multilogin signin`, never edit token YAML
+- **MLX signin 400 / 401 after signin** — run `multilogin signin` (clears stale `automation_token`); session `token` beats expired automation in YAML
+- **Reddit login fill fails** — use `type:faceplate-text-input#login-username|user` or `fill:` (inner input fallback)
+- **Reddit upvote** — use `shadow-click:` or `reddit_upvote`, not plain `click:`
+- **config.yaml reverted to folder-1** — `init --env` no longer wipes UUIDs; remove placeholder IDs from `.env`; run `multilogin setup-wizard`
 - **MLX doctor fails** — start desktop app; run `nextbrowser multilogin setup-wizard`
 - **exec --profile reddit_default fails** — set `MULTILOGIN_PROFILE_REDDIT_DEFAULT` to the profile UUID
 - **PROFILE_ALREADY_RUNNING** — harness reuses CDP port; or `nextbrowser multilogin stop-all`

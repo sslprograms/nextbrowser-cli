@@ -117,6 +117,7 @@ class UndetectedBrowserLayer:
 
         ctx = browser.contexts[0] if browser.contexts else browser.new_context()
         ctx._harness_uc = holder  # type: ignore[attr-defined]
+        ctx._harness_cdp_url = cdp_url  # type: ignore[attr-defined]
         return ctx
 
     def stop(self, profile_id: str) -> None:

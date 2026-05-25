@@ -98,18 +98,19 @@ class MultiloginXClient:
         self._load_saved_tokens()
 
     def _load_saved_tokens(self) -> None:
-        if self._token:
-            return
-        if not self.token_path.exists():
-            return
-        data = yaml.safe_load(self.token_path.read_text(encoding="utf-8")) or {}
-        self._token = (
-            os.getenv("MULTILOGIN_AUTOMATION_TOKEN")
-            or os.getenv("MULTILOGIN_TOKEN")
-            or data.get("automation_token")
-            or data.get("token")
-        )
-        self._refresh_token = data.get("refresh_token")
+        data: dict[str, Any] = {}
+        if self.token_path.exists():
+            data = yaml.safe_load(self.token_path.read_text(encoding="utf-8")) or {}
+        if not self._token:
+            # Prefer session token over automation_token — stale automation breaks post-signin.
+            self._token = (
+                os.getenv("MULTILOGIN_TOKEN")
+                or data.get("token")
+                or os.getenv("MULTILOGIN_AUTOMATION_TOKEN")
+                or data.get("automation_token")
+            )
+        if not self._refresh_token:
+            self._refresh_token = data.get("refresh_token")
         saved_email = data.get("email")
         if saved_email and not os.getenv("MULTILOGIN_EMAIL"):
             os.environ.setdefault("MULTILOGIN_EMAIL", str(saved_email))
@@ -127,6 +128,7 @@ class MultiloginXClient:
             existing = yaml.safe_load(self.token_path.read_text(encoding="utf-8")) or {}
         if token:
             existing["token"] = token
+            existing.pop("automation_token", None)
             self._token = token
         if refresh_token:
             existing["refresh_token"] = refresh_token
@@ -139,11 +141,49 @@ class MultiloginXClient:
         self.token_path.parent.mkdir(parents=True, exist_ok=True)
         self.token_path.write_text(yaml.safe_dump(existing, sort_keys=False), encoding="utf-8")
 
-    def _headers(self, *, launcher: bool = False) -> dict[str, str]:
-        token = self.ensure_token()
-        h = {"Accept": "application/json", "Authorization": f"Bearer {token}"}
+    def _saved_access_token(self) -> str | None:
+        """Session access token for refresh (prefer token over automation_token)."""
+        if self.token_path.exists():
+            data = yaml.safe_load(self.token_path.read_text(encoding="utf-8")) or {}
+            return data.get("token") or data.get("automation_token")
+        return None
+
+    def _drop_automation_token(self) -> None:
+        """Remove expired automation token so signin/refresh session token is used."""
+        if not self.token_path.exists():
+            return
+        data = yaml.safe_load(self.token_path.read_text(encoding="utf-8")) or {}
+        if not data.pop("automation_token", None):
+            return
+        self.token_path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+        session = data.get("token")
+        if session:
+            self._token = session
+
+    def _using_stale_automation_token(self) -> bool:
+        if not self.token_path.exists():
+            return False
+        data = yaml.safe_load(self.token_path.read_text(encoding="utf-8")) or {}
+        auto = data.get("automation_token")
+        return bool(auto and self._token == auto)
+
+    def _headers(self, *, launcher: bool = False, token: str | None = None) -> dict[str, str]:
+        access = token or self.ensure_token()
+        h = {"Accept": "application/json", "Authorization": f"Bearer {access}"}
         if not launcher:
             h["Content-Type"] = "application/json"
+        return h
+
+    def _refresh_request_headers(self) -> dict[str, str]:
+        """MLX refresh_token expects Authorization with the current (possibly expired) access token."""
+        h = {"Accept": "application/json", "Content-Type": "application/json"}
+        bearer = (
+            self._token
+            or os.getenv("MULTILOGIN_TOKEN")
+            or self._saved_access_token()
+        )
+        if bearer:
+            h["Authorization"] = f"Bearer {bearer}"
         return h
 
     def ensure_token(self) -> str:
@@ -171,13 +211,13 @@ class MultiloginXClient:
         **kwargs,
     ) -> dict[str, Any]:
         extra_headers = kwargs.pop("headers", {}) or {}
-        if auth:
-            headers = self._headers(launcher=launcher)
-        else:
-            headers = {"Accept": "application/json", "Content-Type": "application/json"}
-        headers.update(extra_headers)
         last_err = None
         for attempt in range(retries + 1):
+            if auth:
+                headers = self._headers(launcher=launcher)
+            else:
+                headers = {"Accept": "application/json", "Content-Type": "application/json"}
+            headers.update(extra_headers)
             try:
                 resp = requests.request(
                     method,
@@ -190,9 +230,14 @@ class MultiloginXClient:
                 last_err = MultiloginXError(str(e))
                 time.sleep(1)
                 continue
-            if resp.status_code == 401 and attempt < retries and self._refresh_token:
-                self.refresh(self._refresh_token)
-                continue
+            if resp.status_code == 401 and attempt < retries:
+                if self._using_stale_automation_token():
+                    self._drop_automation_token()
+                    self._load_saved_tokens()
+                    continue
+                if self._refresh_token:
+                    self.refresh(self._refresh_token)
+                    continue
             if not resp.ok:
                 detail = _parse_api_error(resp)
                 hint = ""
@@ -243,6 +288,7 @@ class MultiloginXClient:
             f"{self.api_base}/user/refresh_token",
             json=body,
             auth=False,
+            headers=self._refresh_request_headers(),
         )
         block = data.get("data") or {}
         token = block.get("token")
@@ -316,6 +362,32 @@ class MultiloginXClient:
             )
         return None
 
+    def profile_running(
+        self, profile_id: str, *, folder_id: str = ""
+    ) -> StartedProfile | None:
+        """CDP port for an already-running profile (active endpoint, then status)."""
+        active = self.profile_active(profile_id)
+        if active and active.port:
+            return active
+        try:
+            data = self.profile_status(profile_id)
+        except MultiloginXError:
+            return None
+        block = data.get("data") or {}
+        status = (block.get("status") or "").lower()
+        port = block.get("port")
+        if not port and status == "browser_running":
+            port = block.get("message")
+        if status == "browser_running" and port:
+            return StartedProfile(
+                profile_id=profile_id,
+                folder_id=block.get("folder_id") or folder_id,
+                port=str(port),
+                browser_type=block.get("browser_type"),
+                raw=data,
+            )
+        return None
+
     def stop_all_profiles(self) -> dict:
         return self._request(
             "GET",
@@ -352,8 +424,13 @@ class MultiloginXClient:
                 headers=headers,
             )
         except MultiloginXError as e:
-            if "already running" in str(e).lower() or "PROFILE_ALREADY_RUNNING" in str(e):
-                active = self.profile_active(profile_id)
+            err = str(e).lower()
+            if (
+                "already running" in err
+                or "profile_already_running" in err
+                or "browser process is running" in err
+            ):
+                active = self.profile_running(profile_id, folder_id=folder_id)
                 if active and active.port:
                     return active
             raise

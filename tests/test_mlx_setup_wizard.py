@@ -54,10 +54,7 @@ def test_wizard_writes_env_no_password(tmp_path, monkeypatch):
                 "nextbrowser_harness.integrations.multilogin.doctor.mlx_doctor_report",
                 return_value={"ok": True, "next_steps": []},
             ):
-                with patch(
-                    "nextbrowser_harness.integrations.multilogin.setup_wizard.onboard_from_env",
-                ):
-                    result = run_setup_wizard(options=opts, client=client)
+                result = run_setup_wizard(options=opts, client=client)
 
     assert result["folder_id"] == "folder-1"
     assert result["profile_id"] == "profile-1"

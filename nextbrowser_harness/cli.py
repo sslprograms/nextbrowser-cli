@@ -83,8 +83,28 @@ def main(argv: list[str] | None = None) -> int:
     p_exec.add_argument("--js", default=None)
     p_exec.add_argument("--js-file", default=None)
     p_exec.add_argument("--steps-file", default=None)
+    p_exec.add_argument(
+        "--recipe",
+        default=None,
+        help="Site recipe id, e.g. reddit.com/login (see nextbrowser recipes list)",
+    )
+    p_exec.add_argument(
+        "--var",
+        action="append",
+        default=None,
+        help="Recipe variable KEY=VALUE (repeatable), e.g. --var username=u --var password=p",
+    )
     p_exec.add_argument("--action", action="append", default=None)
+    p_exec.add_argument(
+        "--element-search",
+        choices=["playwright", "indexed", "browser_use"],
+        default=None,
+        help="Element lookup: indexed (state/click:N for agents) or playwright (CSS)",
+    )
     p_exec.add_argument("--keep-open", action="store_true", help="Leave browser running (MLX)")
+
+    p_recipes = sub.add_parser("recipes", help="List built-in site action recipes")
+    p_recipes.add_argument("--json", action="store_true", help="JSON output")
 
     p_tier = sub.add_parser("tier", help="Tier database commands")
     tier_sub = p_tier.add_subparsers(dest="tier_cmd", required=True)
@@ -187,9 +207,18 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(harness.status(), indent=2))
         return 0
 
+    def _recipe_vars(ns) -> dict[str, str]:
+        out: dict[str, str] = {}
+        for raw in getattr(ns, "var", None) or []:
+            if "=" in raw:
+                k, _, v = raw.partition("=")
+                out[k.strip()] = v.strip()
+        return out
+
     def _exec_kwargs(ns):
         actions = list(ns.action or [])
-        if not actions and not ns.js and not ns.js_file and not ns.steps_file:
+        recipe = getattr(ns, "recipe", None)
+        if not actions and not ns.js and not ns.js_file and not ns.steps_file and not recipe:
             actions = ["goto", "wait_load", "title", "scroll", "final_url"]
         return dict(
             tier=ns.tier,
@@ -201,6 +230,9 @@ def main(argv: list[str] | None = None) -> int:
             js=ns.js,
             js_file=ns.js_file,
             keep_open=getattr(ns, "keep_open", False),
+            recipe=recipe,
+            recipe_vars=_recipe_vars(ns) or None,
+            element_search=getattr(ns, "element_search", None),
         )
 
     if args.command == "browse":
@@ -212,6 +244,17 @@ def main(argv: list[str] | None = None) -> int:
         out = harness.browse(args.url, profile_id=args.profile, **kw)
         print(json.dumps(out, indent=2))
         return 0 if out.get("success") else 1
+
+    if args.command == "recipes":
+        from nextbrowser_harness.site_recipes import list_recipes
+
+        items = list_recipes()
+        if getattr(args, "json", False):
+            print(json.dumps(items, indent=2))
+        else:
+            for r in items:
+                print(f"  {r['id']}")
+        return 0
 
     if args.command == "exec":
         if args.browser:

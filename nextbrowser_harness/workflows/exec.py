@@ -8,7 +8,10 @@ from dataclasses import asdict
 from pathlib import Path
 
 from nextbrowser_harness.browser_actions import ActionSpec, load_steps_file, run_actions
+from nextbrowser_harness.site_recipes import expand_recipe
 from nextbrowser_harness.config import HarnessConfig
+from nextbrowser_harness.element_search import ElementSearchContext
+from nextbrowser_harness.element_search.context import resolve_element_search_mode
 from nextbrowser_harness.layers.browser.antidetect import browser_layer_for
 from nextbrowser_harness.tiers.resolver import TierResolver
 from nextbrowser_harness.integrations.multilogin.recommend import multilogin_recommendation
@@ -28,6 +31,9 @@ def exec_site(
     js: str | None = None,
     js_file: str | Path | None = None,
     keep_open: bool = False,
+    recipe: str | None = None,
+    recipe_vars: dict[str, str] | None = None,
+    element_search: str | None = None,
 ) -> BrowseResult:
     """
     Open browser, run automation steps, return JSON-friendly result for agents.
@@ -40,6 +46,12 @@ def exec_site(
     mlx_hint = multilogin_recommendation(config, url, tier=use_tier, cache_path=config.tier_cache_path)
 
     specs: list[ActionSpec] = []
+    if recipe:
+        recipe_url, recipe_actions = expand_recipe(recipe, url=url, variables=recipe_vars or {})
+        if recipe_url:
+            url = recipe_url
+        for raw in recipe_actions:
+            specs.append(ActionSpec.parse(raw))
     if steps_file:
         steps_url, steps = load_steps_file(steps_file)
         if steps_url:
@@ -89,7 +101,15 @@ def exec_site(
     try:
         ctx = layer.launch_context(session, proxy=proxy_ep, headless=headless)
         page = ctx.pages[0] if ctx.pages else ctx.new_page()
-        results = run_actions(page, specs, default_url=url, screenshot=screenshot)
+        mode = resolve_element_search_mode(config, override=element_search)
+        element_ctx = ElementSearchContext(mode=mode)
+        results = run_actions(
+            page,
+            specs,
+            default_url=url,
+            screenshot=screenshot,
+            element_ctx=element_ctx,
+        )
 
         if screenshot and not any(r.name == "screenshot" and r.ok for r in results):
             try:

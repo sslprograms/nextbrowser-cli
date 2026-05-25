@@ -15,6 +15,10 @@ def browser_layer_for(config: HarnessConfig):
     if config.browser == "native":
         if config.driver == "playwright":
             return NativeBrowserLayer.from_config(config)
+        try:
+            import undetected_chromedriver  # noqa: F401
+        except ImportError:
+            return NativeBrowserLayer.from_config(config)
         from nextbrowser_harness.layers.browser.undetected import UndetectedBrowserLayer
 
         return UndetectedBrowserLayer.from_config(config)

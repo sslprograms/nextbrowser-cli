@@ -118,6 +118,7 @@ class MultiloginBrowserLayer:
         # Return first context as primary; attach cleanup metadata
         ctx = browser.contexts[0] if browser.contexts else browser.new_context()
         ctx._harness_mlx = holder  # type: ignore[attr-defined]
+        ctx._harness_cdp_url = cdp  # type: ignore[attr-defined]
         return ctx
 
     def stop(self, profile_id: str) -> None:

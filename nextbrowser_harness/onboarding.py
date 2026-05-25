@@ -10,7 +10,18 @@ from nextbrowser_harness.config import (
     HarnessConfig,
     ProxyChoice,
     UseCase,
+    resolve_config_path,
 )
+
+# Example / test placeholders — never write these into config.yaml
+_PLACEHOLDER_MLX_IDS = frozenset(
+    {"folder-1", "profile-1", "folder-uuid", "profile-uuid", "your-folder-id", "your-profile-id"}
+)
+
+
+def _is_placeholder_mlx_id(value: str) -> bool:
+    v = (value or "").strip().lower()
+    return not v or v in _PLACEHOLDER_MLX_IDS
 
 
 def _prompt_proxy(browser: BrowserChoice) -> ProxyChoice:
@@ -88,24 +99,48 @@ def onboard_interactive(*, run_mlx_wizard: bool = False) -> HarnessConfig:
 
 
 def onboard_from_env() -> HarnessConfig:
-    """Headless onboarding for agents — env vars override defaults."""
-    use = os.getenv("NEXTBROWSER_USE_CASE", "scrape").lower()
-    browser = os.getenv("NEXTBROWSER_BROWSER", "native").strip().lower()
-    proxy_default = "none" if browser == "multilogin" else os.getenv("NEXTBROWSER_PROXY", "none")
-    driver_raw = os.getenv("NEXTBROWSER_DRIVER", "undetected").strip().lower()
-    driver: DriverChoice = "playwright" if driver_raw == "playwright" else "undetected"
-    if browser != "native":
-        driver = "playwright"
+    """Headless onboarding — merge env into existing config (never wipe MLX UUIDs)."""
+    path = resolve_config_path()
+    cfg = HarnessConfig.load() if path.exists() else HarnessConfig()
 
-    cfg = HarnessConfig(
-        use_case="accounts" if use.startswith("account") else "scrape",
-        browser=browser,  # type: ignore[arg-type]
-        proxy=proxy_default,  # type: ignore[arg-type]
-        driver=driver,
-        automation=os.getenv("NEXTBROWSER_AUTOMATION", "playwright"),  # type: ignore[arg-type]
-        headless=os.getenv("NEXTBROWSER_HEADLESS", "true").lower() in ("1", "true", "yes"),
-        llm_model=os.getenv("NEXTBROWSER_LLM_MODEL") or os.getenv("ANTHROPIC_MODEL"),
-    )
+    use = os.getenv("NEXTBROWSER_USE_CASE", "").strip().lower()
+    if use:
+        cfg.use_case = "accounts" if use.startswith("account") else "scrape"  # type: ignore[assignment]
+
+    browser = os.getenv("NEXTBROWSER_BROWSER", "").strip().lower()
+    if browser:
+        cfg.browser = browser  # type: ignore[assignment]
+
+    proxy = os.getenv("NEXTBROWSER_PROXY", "").strip().lower()
+    if proxy:
+        cfg.proxy = proxy  # type: ignore[assignment]
+    elif cfg.browser == "multilogin":
+        cfg.proxy = "none"  # type: ignore[assignment]
+
+    driver_raw = os.getenv("NEXTBROWSER_DRIVER", "").strip().lower()
+    if driver_raw:
+        cfg.driver = "playwright" if driver_raw == "playwright" else "undetected"  # type: ignore[assignment]
+    if cfg.browser != "native":
+        cfg.driver = "playwright"  # type: ignore[assignment]
+
+    automation = os.getenv("NEXTBROWSER_AUTOMATION", "").strip().lower()
+    if automation:
+        cfg.automation = automation  # type: ignore[assignment]
+
+    element_search = os.getenv("NEXTBROWSER_ELEMENT_SEARCH", "").strip().lower()
+    if element_search in ("indexed", "index", "agent", "ai", "browser_use", "browser-use", "bu"):
+        cfg.element_search = "indexed"  # type: ignore[assignment]
+    elif element_search == "playwright":
+        cfg.element_search = "playwright"  # type: ignore[assignment]
+
+    headless_env = os.getenv("NEXTBROWSER_HEADLESS", "").strip().lower()
+    if headless_env:
+        cfg.headless = headless_env in ("1", "true", "yes")
+
+    llm = os.getenv("NEXTBROWSER_LLM_MODEL") or os.getenv("ANTHROPIC_MODEL")
+    if llm:
+        cfg.llm_model = llm
+
     if cfg.proxy == "nodemaven" and os.getenv("NODEMAVEN_PROXY_HOST"):
         cfg.nodemaven = {
             "host": os.getenv("NODEMAVEN_PROXY_HOST", ""),
@@ -122,23 +157,34 @@ def onboard_from_env() -> HarnessConfig:
 
 
 def _apply_multilogin_env(cfg: HarnessConfig) -> None:
-    """Persist MLX folder/profile UUIDs from env into config for agents."""
+    """Merge MLX folder/profile UUIDs from env into config (keep existing real UUIDs)."""
     folder = os.getenv("MULTILOGIN_FOLDER_ID", "").strip()
     default_profile = os.getenv("MULTILOGIN_PROFILE_ID", "").strip()
-    profiles: dict[str, str] = {}
+    if _is_placeholder_mlx_id(folder):
+        folder = ""
+    if _is_placeholder_mlx_id(default_profile):
+        default_profile = ""
+
+    profiles: dict[str, str] = dict((cfg.multilogin or {}).get("profiles") or {})
     for key, val in os.environ.items():
         if not key.startswith("MULTILOGIN_PROFILE_") or key == "MULTILOGIN_PROFILE_ID":
             continue
-        if not val.strip():
+        pid = val.strip()
+        if not pid or _is_placeholder_mlx_id(pid):
             continue
         account_key = key[len("MULTILOGIN_PROFILE_") :].lower()
-        profiles[account_key] = val.strip()
-    if folder or default_profile or profiles:
-        cfg.multilogin = {
-            "folder_id": folder,
-            "default_profile_id": default_profile,
-            "profiles": profiles,
-        }
+        profiles[account_key] = pid
+
+    mlx: dict[str, object] = dict(cfg.multilogin or {})
+    if folder:
+        mlx["folder_id"] = folder
+    if default_profile:
+        mlx["default_profile_id"] = default_profile
+    if profiles:
+        mlx["profiles"] = profiles
+    if mlx:
+        cfg.multilogin = mlx
+
     if os.getenv("NEXTBROWSER_BROWSER", "").strip().lower() == "multilogin":
         cfg.browser = "multilogin"  # type: ignore[assignment]
         cfg.proxy = "none"  # type: ignore[assignment]

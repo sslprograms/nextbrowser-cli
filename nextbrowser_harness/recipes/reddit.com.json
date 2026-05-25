@@ -1,0 +1,23 @@
+{
+  "site": "reddit.com",
+  "flows": {
+    "login": {
+      "url": "https://www.reddit.com/login",
+      "actions": [
+        "goto",
+        "wait-for:#login-username input|faceplate-text-input#login-username input|input[name=username]",
+        "type:#login-username input|faceplate-text-input#login-username input|input[name=username]|{username}",
+        "type:#login-password input|faceplate-text-input#login-password input|input[name=password]|{password}",
+        "deep-click:button[type=submit]|faceplate-button[type=submit]|button.login",
+        "wait-for-nav:",
+        "wait:2000",
+        "logged-in:reddit.com"
+      ]
+    },
+    "upvote": {
+      "actions": [
+        "deep-click:shreddit-post >> button:has(svg[icon-name='upvote'])"
+      ]
+    }
+  }
+}

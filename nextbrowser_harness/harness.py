@@ -14,6 +14,27 @@ from nextbrowser_harness.integrations.multilogin.recommend import multilogin_rec
 from nextbrowser_harness.workflows.scraping import ScrapingWorkflow
 
 
+def _agent_fix_hint(error: str, config: HarnessConfig) -> str:
+    """Actionable hint when exec/browse fails — shown to agents in JSON."""
+    e = (error or "").lower()
+    if "undetected-chromedriver" in e:
+        return (
+            "Install: pip install -e '.[playwright,undetected]' && playwright install chromium; "
+            "or set NEXTBROWSER_DRIVER=playwright and use exec --browser native"
+        )
+    if "launcher is not reachable" in e or "connection" in e and "45001" in e:
+        return "Start Multilogin X desktop app, then: nextbrowser multilogin doctor"
+    if "profile_already_running" in e or "browser process is running" in e:
+        return "Run: nextbrowser multilogin stop-all — then retry exec"
+    if "folder_id" in e or "profile id" in e:
+        return "Run: nextbrowser multilogin setup-wizard"
+    if "playwright" in e and "install" in e:
+        return "pip install -e '.[playwright]' && playwright install chromium"
+    if config.browser == "multilogin":
+        return "MLX failed — try: exec --browser native --tier 3, or fix MLX with multilogin doctor"
+    return "Use full platform.cli from nextbrowser status; must be exec not scrape for clicks/JS"
+
+
 class Harness:
     """Main orchestrator — loads config, wires workflows."""
 
@@ -112,6 +133,8 @@ class Harness:
         ).to_dict()
         out["agent_mode"] = True
         out["hint"] = "Navigation via nextbrowser browse/exec; do not spawn separate Playwright scripts."
+        if not out.get("success") and out.get("error"):
+            out["agent_fix"] = _agent_fix_hint(out.get("error", ""), self.config)
         return out
 
     def exec(
@@ -127,6 +150,9 @@ class Harness:
         js_file: str | None = None,
         headless: bool | None = None,
         keep_open: bool = False,
+        recipe: str | None = None,
+        recipe_vars: dict[str, str] | None = None,
+        element_search: str | None = None,
     ) -> dict:
         out = exec_site(
             self.config,
@@ -140,7 +166,12 @@ class Harness:
             js_file=js_file,
             headless=headless,
             keep_open=keep_open,
+            recipe=recipe,
+            recipe_vars=recipe_vars,
+            element_search=element_search,
         ).to_dict()
         out["agent_mode"] = True
         out["hint"] = "Navigation via nextbrowser exec; do not spawn separate Playwright scripts."
+        if not out.get("success") and out.get("error"):
+            out["agent_fix"] = _agent_fix_hint(out.get("error", ""), self.config)
         return out

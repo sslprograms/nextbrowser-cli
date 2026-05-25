@@ -19,7 +19,7 @@ from nextbrowser_harness.integrations.multilogin.platform_hints import (
     try_start_mlx_desktop,
 )
 from nextbrowser_harness.platform_paths import is_linux
-from nextbrowser_harness.onboarding import onboard_from_env
+from nextbrowser_harness.onboarding import _apply_multilogin_env
 
 
 MLX_DOWNLOAD_URL = "https://multilogin.com"
@@ -229,9 +229,8 @@ def run_setup_wizard(
         "default_profile_id": profile_id,
         "profiles": {opts.profile_key: profile_id},
     }
+    _apply_multilogin_env(cfg)
     cfg.save()
-
-    onboard_from_env()
 
     from nextbrowser_harness.integrations.multilogin.doctor import mlx_doctor_report
 
