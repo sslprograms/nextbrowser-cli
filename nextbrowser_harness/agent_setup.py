@@ -139,17 +139,16 @@ def print_post_install(paths: list[tuple[str, Path]]) -> str:
     lines = ["Installed nextbrowser-harness skill:"]
     for host_id, path in paths:
         lines.append(f"  [{host_id}] {path}")
+    cli = platform_status()["cli"]
     lines.extend([
         "",
-        "Config examples (merge for your host):",
-        json.dumps(config_snippets(), indent=2),
-        "",
         "Bootstrap:",
-        f"  {platform_status()['cli']} init --env",
+        f"  {cli} init --env",
+        "",
+        "Automation guide (any host):",
+        f"  {cli} status   # read how_to_automate + agent_navigation",
         "",
         "Multilogin X (optional):",
         f"  {mlx_setup_wizard_command()}",
-        "",
-        "Use platform.cli from `nextbrowser status` as the shell prefix in any agent.",
     ])
     return "\n".join(lines)

@@ -322,6 +322,65 @@ class MultiloginXClient:
         data = self._request("GET", f"{self.api_base}/workspace/folders")
         return (data.get("data") or {}).get("folders") or []
 
+    def create_profile(
+        self,
+        name: str,
+        folder_id: str,
+        *,
+        browser_type: str = "mimic",
+        os_type: str | None = None,
+    ) -> str:
+        """
+        POST /profile/create — returns new profile UUID.
+        Cookies/storage persist in MLX so a one-time login can be reused.
+        """
+        import platform as plat
+
+        if not os_type:
+            os_type = {
+                "Windows": "windows",
+                "Darwin": "macos",
+                "Linux": "linux",
+            }.get(plat.system(), "windows")
+        body = {
+            "name": name,
+            "folder_id": folder_id,
+            "browser_type": browser_type,
+            "os_type": os_type,
+            "parameters": {
+                "flags": {
+                    "audio_masking": "mask",
+                    "fonts_masking": "natural",
+                    "geolocation_masking": "mask",
+                    "geolocation_popup": "prompt",
+                    "graphics_masking": "mask",
+                    "graphics_noise": "mask",
+                    "localization_masking": "mask",
+                    "media_devices_masking": "natural",
+                    "navigator_masking": "mask",
+                    "ports_masking": "mask",
+                    "proxy_masking": "disabled",
+                    "screen_masking": "mask",
+                    "timezone_masking": "mask",
+                    "webrtc_masking": "mask",
+                },
+                "storage": {
+                    "bookmarks": True,
+                    "cookies": True,
+                    "extensions": True,
+                    "history": True,
+                    "local_storage": True,
+                    "passwords": True,
+                },
+            },
+        }
+        data = self._request("POST", f"{self.api_base}/profile/create", json=body)
+        block = data.get("data") or data
+        profile_id = block.get("id") or block.get("profile_id") or block.get("uuid")
+        if not profile_id:
+            raise MultiloginXError(f"profile/create did not return id: {data}")
+        return str(profile_id)
+
     def search_profiles(
         self,
         *,

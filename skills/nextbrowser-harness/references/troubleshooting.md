@@ -1,63 +1,74 @@
 # Troubleshooting (agents)
 
+## Tier 3: missing account
+
+**Symptom:** `success: false`, `agent_prompt` about “Which saved account” or “named account”.
+
+```bash
+nextbrowser account list
+nextbrowser account add <name> --create-mlx
+```
+
+Ask the user which name to use or whether to create a new login.
+
+## Tier 3: missing credentials
+
+**Symptom:** `agent_prompt` about username/password or placeholders.
+
+Ask the user for real credentials. Retry with:
+
+```bash
+<cli> exec "<url>" --account <name> --var username=REAL --var password=REAL
+# or
+<cli> exec "<url>" --account <name> --action "type:N|REAL"
+```
+
+Do not use `USER`, `PASS`, or empty `--var` values.
+
 ## CLI not found
 
-Run `nextbrowser status` and use the full `platform.cli` string (often `python -m nextbrowser_harness.cli`).
+```bash
+nextbrowser status
+```
 
-Ensure venv is activated or `nextbrowser` is on PATH after `pip install -e .`.
+Use `platform.cli` from JSON. `pip install -e .` and activate venv.
 
-## Skill not loading (Hermes / OpenClaw / Cursor)
+## Skill not loading
 
 ```bash
+nextbrowser agent install --force
 nextbrowser agent doctor
-nextbrowser agent install --host all --force
 ```
 
-| Host | Check path |
-|------|------------|
-| Hermes | `~/.hermes/skills/browser-automation/nextbrowser-harness/SKILL.md` |
-| OpenClaw | `~/.openclaw/skills/nextbrowser-harness/SKILL.md` |
-| Claude | `~/.claude/skills/nextbrowser-harness/SKILL.md` |
-| Cursor | `~/.cursor/skills/nextbrowser-harness/SKILL.md` |
+New agent session after install.
 
-Hermes: start a new session or run `/nextbrowser-harness` after install.
+## Element clicks fail (SPA / shadow DOM)
 
-OpenClaw: new session after install; set env in `openclaw.json` → `skills.entries.nextbrowser-harness.env`.
-
-## Invalid SKILL.md / YAML errors
-
-Frontmatter must be valid YAML. Run:
+Tier 3 — always include account and use indices:
 
 ```bash
-python -m pytest tests/test_skill_pack.py -q
+<cli> exec "<url>" --account <name> --action goto --action state
+<cli> exec "<url>" --account <name> --action "click:N"
 ```
+
+## MLX / CDP
+
+| Symptom | Fix |
+|---------|-----|
+| Launcher not reachable | Start MLX desktop; `multilogin doctor` |
+| Signin 400 | MLX app credentials at multilogin.com |
+| Token 400 | `multilogin automation-token` after signin |
+| Profile already running | `multilogin stop-all` |
+| Linux launcher broken | `multilogin fix-linux-launcher` |
+| No CDP port | Launcher must be running; check doctor |
 
 ## Playwright missing
 
 ```bash
 pip install -e ".[playwright]"
 playwright install chromium
-# Linux may also need:
-playwright install-deps chromium
 ```
 
-## Account run / exec fails
+## Agent wrote Playwright Python
 
-Set `NEXTBROWSER_AUTOMATION=playwright` in env or `~/.nextbrowser/config.yaml`.
-
-## MLX issues
-
-| Symptom | Fix |
-|---------|-----|
-| Signin 400 | Use MLX app login credentials |
-| Token 400 | Run `multilogin automation-token` after signin |
-| Profile already running | Harness reuses CDP; or `multilogin stop-all` |
-| Launcher 404 on stop | Use `multilogin stop-all` |
-
-## Agent wrote Playwright Python instead of CLI
-
-Reload skill. Policy: use `nextbrowser exec` / `browse` / `scrape` only. See `AGENTS.md` in repo root.
-
-## Sandboxed agents
-
-The sandbox image must include Python, this package, Playwright, and Chromium — not just the host OS.
+Reload skill — use `exec` / `scrape` / `account` only.

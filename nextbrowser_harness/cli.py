@@ -55,7 +55,8 @@ def main(argv: list[str] | None = None) -> int:
     )
     p_browse.add_argument("--browser", choices=["native", "multilogin"], default=None,
                           help="Override config browser for this run")
-    p_browse.add_argument("--profile", default="reddit_default", help="Profile / MLX account key")
+    p_browse.add_argument("--profile", default=None, help="Named Multilogin account (tier 3)")
+    p_browse.add_argument("--account", default=None, help="Same as --profile (tier 3 required)")
     p_browse.add_argument("--screenshot", default=None, help="Save PNG screenshot path")
     p_browse.add_argument("--headless", action="store_true", help="Headless (native only; MLX usually headful)")
     p_browse.add_argument("--json", action="store_true", default=True)
@@ -77,7 +78,8 @@ def main(argv: list[str] | None = None) -> int:
         help="Force tier; omit to use tier DB recommendation for URL (min tier 2 for browser)",
     )
     p_exec.add_argument("--browser", choices=["native", "multilogin"], default=None)
-    p_exec.add_argument("--profile", default="default", help="Profile / MLX account key")
+    p_exec.add_argument("--profile", default=None, help="Named Multilogin account (tier 3)")
+    p_exec.add_argument("--account", default=None, help="Same as --profile (tier 3 required)")
     p_exec.add_argument("--screenshot", default=None)
     p_exec.add_argument("--headless", action="store_true")
     p_exec.add_argument("--js", default=None)
@@ -116,10 +118,23 @@ def main(argv: list[str] | None = None) -> int:
 
     p_acct = sub.add_parser("account", help="Account automation")
     acct_sub = p_acct.add_subparsers(dest="acct_cmd", required=True)
-    p_acct_add = acct_sub.add_parser("add", help="Register account profile")
-    p_acct_add.add_argument("account_id")
+    p_acct_add = acct_sub.add_parser("add", help="Register named Multilogin account (tier 3)")
+    p_acct_add.add_argument("account_id", help="Short name, e.g. reddit_main")
     p_acct_add.add_argument("--notes", default="")
-    acct_sub.add_parser("list", help="List registered accounts")
+    p_acct_add.add_argument("--display-name", default="", help="MLX profile display name")
+    p_acct_add.add_argument("--site", default="", help="Site label, e.g. reddit.com")
+    p_acct_add.add_argument(
+        "--mlx-profile",
+        default=None,
+        help="Link existing Multilogin profile UUID (skip --create-mlx)",
+    )
+    p_acct_add.add_argument(
+        "--create-mlx",
+        action="store_true",
+        help="Create a new Multilogin browser profile and save cookies for reuse",
+    )
+    p_acct_list = acct_sub.add_parser("list", help="List registered accounts")
+    p_acct_list.add_argument("--json", action="store_true", help="JSON output")
     p_acct_run = acct_sub.add_parser("run", help="Run task for an account")
     p_acct_run.add_argument("account_id")
     p_acct_run.add_argument("task")
@@ -220,9 +235,10 @@ def main(argv: list[str] | None = None) -> int:
         recipe = getattr(ns, "recipe", None)
         if not actions and not ns.js and not ns.js_file and not ns.steps_file and not recipe:
             actions = ["goto", "wait_load", "title", "scroll", "final_url"]
+        account = getattr(ns, "account", None) or ns.profile
         return dict(
             tier=ns.tier,
-            profile_id=ns.profile,
+            profile_id=account,
             screenshot=ns.screenshot,
             headless=True if ns.headless else None,
             actions=actions or None,
@@ -241,7 +257,8 @@ def main(argv: list[str] | None = None) -> int:
         kw = _exec_kwargs(args)
         if not args.action and not args.js and not args.js_file and not args.steps_file:
             kw["actions"] = ["goto", "wait_load", "title", "scroll", "reddit_feed_check", "final_url"]
-        out = harness.browse(args.url, profile_id=args.profile, **kw)
+        account = getattr(args, "account", None) or args.profile
+        out = harness.browse(args.url, profile_id=account, **kw)
         print(json.dumps(out, indent=2))
         return 0 if out.get("success") else 1
 
@@ -449,12 +466,37 @@ def main(argv: list[str] | None = None) -> int:
             "nextbrowser_harness.workflows.accounts", fromlist=["AccountAutomationWorkflow"]
         ).AccountAutomationWorkflow(harness.config)
         if args.acct_cmd == "add":
-            p = wf.register_account(args.account_id, notes=args.notes)
-            print(json.dumps(p.__dict__, indent=2))
+            try:
+                p = wf.register_account(
+                    args.account_id,
+                    notes=args.notes,
+                    display_name=args.display_name,
+                    site=args.site,
+                    mlx_profile_id=args.mlx_profile or "",
+                    create_mlx=args.create_mlx,
+                )
+            except Exception as e:
+                from nextbrowser_harness.accounts.registry import Tier3AccountError
+
+                if isinstance(e, Tier3AccountError):
+                    print(json.dumps({"error": str(e), "agent_prompt": e.agent_prompt, "code": e.code}, indent=2))
+                    return 1
+                raise
+            print(json.dumps(p.to_dict(), indent=2))
             return 0
         if args.acct_cmd == "list":
-            for p in wf.list_accounts():
-                print(f"{p.account_id}  profile={p.browser_profile}  last_run={p.last_run}")
+            accounts = wf.list_accounts()
+            if args.json:
+                print(json.dumps([a.to_dict() for a in accounts], indent=2))
+            else:
+                for p in accounts:
+                    login = "logged_in" if p.logged_in else "needs_login"
+                    mlx = p.mlx_profile_id
+                    mlx_short = f"{mlx[:8]}..." if len(mlx) > 8 else (mlx or "-")
+                    print(
+                        f"{p.account_id}  mlx={mlx_short}  "
+                        f"site={p.site or '-'}  {login}  last_run={p.last_run}"
+                    )
             return 0
         if args.acct_cmd == "run":
             task = args.task

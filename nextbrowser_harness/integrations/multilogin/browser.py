@@ -39,8 +39,16 @@ class MultiloginBrowserLayer:
     def resolve_profile_id(self, account_key: str) -> tuple[str, str]:
         """
         Map harness account key -> (folder_id, profile_uuid).
-        Env: MULTILOGIN_PROFILE_<KEY>, config multilogin.profiles dict, or MULTILOGIN_PROFILE_ID default.
+        Prefer accounts registry, then config multilogin.profiles, then env.
         """
+        from nextbrowser_harness.accounts.registry import AccountRegistry
+
+        reg_folder, reg_profile = AccountRegistry(self.config).resolve_mlx_profile(account_key)
+        if reg_profile:
+            folder_id = reg_folder or self.default_folder_id()
+            if folder_id:
+                return folder_id, reg_profile
+
         profiles = self._mlx.get("profiles") or {}
         folder_id = self.default_folder_id()
         env_key = f"MULTILOGIN_PROFILE_{account_key.upper().replace('-', '_')}"

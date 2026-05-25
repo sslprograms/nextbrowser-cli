@@ -1,44 +1,32 @@
 # Agent instructions — Nextbrowser Harness
 
-Official CLI repo: [github.com/sslprograms/nextbrowser-cli](https://github.com/sslprograms/nextbrowser-cli)
+**Tier 3 browser automation** = **Multilogin profile** + **CDP** + **named account** (`--account`).
 
-This project is the `nextbrowser` CLI (`nextbrowser-harness` package).
-
-**Navigation policy:** Use `nextbrowser exec` / `browse` / `scrape` — never generate standalone Playwright Python unless the user explicitly requests it. Run `nextbrowser status` and follow `agent_navigation` in the JSON.
-
-Install skill: `nextbrowser agent install --host all --force` (Hermes, OpenClaw, Claude, Cursor, Continue, Roo, …). Validate: `nextbrowser agent doctor`.
-
-## CLI (use this prefix)
-
-Run `nextbrowser status` and use the `platform.cli` value from JSON (e.g. `nextbrowser` or `python3 -m nextbrowser_harness.cli`).
-
-## Common tasks
+## Start
 
 ```bash
-<cli> init --env
-<cli> exec "<url>" --js "document.title"              # inject JS (agents)
-<cli> exec "<url>" --steps-file examples/steps-reddit.json
+nextbrowser status
+```
+
+Read `accounts`, `tier3_automation`, `how_to_automate`, use `platform.cli` as prefix.
+
+## Ask the user first
+
+- **Which account?** (`nextbrowser account list`)
+- **New login?** → `nextbrowser account add <name> --create-mlx`
+- **Credentials?** — if login needed and you don't have them, ask; never use placeholders.
+
+## Automate
+
+```bash
+<cli> exec "<url>" --account <name> --action goto --action state
+<cli> exec "<url>" --account <name> --action "click:N" --action "type:N|value"
+```
+
+## Read-only
+
+```bash
 <cli> scrape "<url>" --json
-<cli> tier lookup "<url>"
-<cli> account add <id>
-<cli> account run <id> "eval:document.title" --url "<url>" --json
-<cli> multilogin profiles
 ```
 
-See `docs/AGENT_QUICKSTART.md` for OpenClaw / Claude / Cursor setup.
-
-## Install skill for your host
-
-```bash
-<cli> agent list-hosts
-<cli> agent install --host openclaw   # or claude, cursor, all
-```
-
-See `docs/AGENT_HOSTS.md` for OpenClaw, Claude Code, Cursor, Codex, Gemini, and others.
-
-## Constraints
-
-- Tier 1 = HTTP only; tier 2/3 need Playwright (`pip install -e ".[playwright]"`).
-- Multilogin: start MLX desktop first (`MULTILOGIN_APP_EXE` on Windows, e.g. `%LOCALAPPDATA%\Multilogin X App\MLXDesktopApp.exe`), then `multilogin doctor` → token + folder/profile IDs. See `skills/nextbrowser-harness/SKILL.md` MLX section.
-- `browse --browser native` works without MLX; `browse --browser multilogin` needs launcher on :45001.
-- Linux: `playwright install-deps chromium` for headless Chrome.
+Skill: `skills/nextbrowser-harness/SKILL.md`

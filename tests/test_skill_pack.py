@@ -1,4 +1,4 @@
-"""Validate bundled AgentSkills pack (YAML frontmatter, Hermes/OpenClaw fields)."""
+"""Validate bundled AgentSkills pack (YAML frontmatter, host-agnostic automation skill)."""
 
 from __future__ import annotations
 
@@ -28,6 +28,7 @@ def test_bundled_skill_layout():
     assert root.name == "nextbrowser-harness"
     assert (root / "SKILL.md").is_file()
     assert (root / "references" / "commands.md").is_file()
+    assert (root / "references" / "automation.md").is_file()
 
 
 def test_skill_frontmatter_agentskills():
@@ -39,18 +40,17 @@ def test_skill_frontmatter_agentskills():
     assert "windows" in meta.get("platforms", [])
 
 
-def test_skill_hermes_metadata():
-    meta = load_skill_frontmatter()
-    hermes = meta.get("metadata", {}).get("hermes", {})
-    assert hermes.get("category") == "browser-automation"
-    assert "terminal" in hermes.get("requires_toolsets", [])
-
-
-def test_skill_openclaw_metadata():
-    meta = load_skill_frontmatter()
-    openclaw = meta.get("metadata", {}).get("openclaw", {})
-    assert openclaw.get("emoji")
-    assert "nextbrowser" in openclaw.get("requires", {}).get("anyBins", [])
+def test_skill_teaches_universal_automation():
+    root = bundled_skill_dir()
+    body = (root / "SKILL.md").read_text(encoding="utf-8")
+    assert "references/automation.md" in body
+    assert "--account" in body
+    assert "agent_prompt" in body
+    assert "CDP" in body or "cdp" in body
+    assert "account add" in body
+    assert "Which account" in body or "which account" in body
+    assert "Host paths" not in body
+    assert (root / "references" / "automation.md").is_file()
 
 
 def test_skill_no_secret_env_prompts():

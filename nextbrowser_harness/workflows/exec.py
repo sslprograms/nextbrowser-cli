@@ -14,8 +14,10 @@ from nextbrowser_harness.element_search import ElementSearchContext
 from nextbrowser_harness.element_search.context import resolve_element_search_mode
 from nextbrowser_harness.layers.browser.antidetect import browser_layer_for
 from nextbrowser_harness.tiers.resolver import TierResolver
+from nextbrowser_harness.accounts.registry import AccountRegistry, Tier3AccountError
 from nextbrowser_harness.integrations.multilogin.recommend import multilogin_recommendation
 from nextbrowser_harness.workflows.browser_result import BrowseResult
+from nextbrowser_harness.workflows.tier3_gate import prepare_tier3_automation
 
 
 def exec_site(
@@ -23,7 +25,7 @@ def exec_site(
     url: str,
     *,
     tier: int | None = None,
-    profile_id: str = "default",
+    profile_id: str | None = None,
     headless: bool | None = None,
     screenshot: str | None = None,
     actions: list[str | dict] | None = None,
@@ -44,6 +46,33 @@ def exec_site(
     if use_tier not in (2, 3):
         use_tier = 3
     mlx_hint = multilogin_recommendation(config, url, tier=use_tier, cache_path=config.tier_cache_path)
+
+    tier3_meta: dict = {}
+    run_config = config
+    account_id: str | None = None
+    try:
+        run_config, account, tier3_meta = prepare_tier3_automation(
+            config,
+            resolved_tier=use_tier,
+            account_key=profile_id or "",
+            recipe=recipe,
+            recipe_vars=recipe_vars,
+            actions=actions,
+        )
+        if account:
+            account_id = account.account_id
+    except Tier3AccountError as e:
+        return BrowseResult(
+            url=url,
+            browser=config.browser,
+            tier=use_tier,
+            success=False,
+            error=str(e),
+            agent_prompt=e.agent_prompt,
+            tier3_required=True,
+            tier_source=rec.source if tier is None else "forced",
+            multilogin_recommendation=mlx_hint,
+        )
 
     specs: list[ActionSpec] = []
     if recipe:
@@ -76,23 +105,23 @@ def exec_site(
 
     headful = use_tier >= 3
     if headless is None:
-        if config.browser == "multilogin":
+        if run_config.browser == "multilogin":
             headless = False
         else:
             headless = not headful
 
-    layer = browser_layer_for(config)
-    session = layer.ensure_profile(profile_id)
+    layer = browser_layer_for(run_config)
+    session = layer.ensure_profile(profile_id or "")
     proxy_ep = None
     try:
-        if config.proxy == "nodemaven":
+        if run_config.proxy == "nodemaven":
             from nextbrowser_harness.layers.proxy import NodeMavenProxyLayer
 
-            proxy_ep = NodeMavenProxyLayer.from_config(config).get_endpoint(profile_id)
-        elif config.custom_proxies:
+            proxy_ep = NodeMavenProxyLayer.from_config(run_config).get_endpoint(profile_id or "default")
+        elif run_config.custom_proxies:
             from nextbrowser_harness.layers.proxy import CustomProxyLayer
 
-            proxy_ep = CustomProxyLayer.from_config(config).get_endpoint(profile_id)
+            proxy_ep = CustomProxyLayer.from_config(run_config).get_endpoint(profile_id or "default")
     except ValueError:
         pass
 
@@ -101,7 +130,7 @@ def exec_site(
     try:
         ctx = layer.launch_context(session, proxy=proxy_ep, headless=headless)
         page = ctx.pages[0] if ctx.pages else ctx.new_page()
-        mode = resolve_element_search_mode(config, override=element_search)
+        mode = resolve_element_search_mode(run_config, override=element_search)
         element_ctx = ElementSearchContext(mode=mode)
         results = run_actions(
             page,
@@ -124,9 +153,14 @@ def exec_site(
         required_ok = [r for r in results if r.name not in optional]
         navigated = any(r.ok for r in results if r.name in ("goto", "eval", "jsfile"))
 
+        if account_id and any(r.name == "logged-in" and r.ok for r in results):
+            AccountRegistry(run_config).mark_logged_in(account_id)
+        elif account_id:
+            AccountRegistry(run_config).touch_run(account_id)
+
         return BrowseResult(
             url=url,
-            browser=config.browser,
+            browser=run_config.browser,
             tier=use_tier,
             success=not blocked and navigated and (not required_ok or all(r.ok for r in required_ok)),
             title=title,
@@ -136,17 +170,23 @@ def exec_site(
             screenshot_path=screenshot,
             tier_source=rec.source if tier is None else "forced",
             multilogin_recommendation=mlx_hint,
+            account_id=account_id,
+            connection=tier3_meta.get("connection"),
+            tier3_required=bool(tier3_meta.get("tier3_required")),
         )
     except Exception as e:
         return BrowseResult(
             url=url,
-            browser=config.browser,
+            browser=run_config.browser,
             tier=use_tier,
             success=False,
             actions=[asdict(r) for r in results] if results else [],
             error=str(e),
             tier_source=rec.source if tier is None else "forced",
             multilogin_recommendation=mlx_hint,
+            account_id=account_id,
+            connection=tier3_meta.get("connection"),
+            tier3_required=bool(tier3_meta.get("tier3_required")),
         )
     finally:
         if not keep_open and ctx is not None:
@@ -162,4 +202,4 @@ def exec_site(
             except Exception:
                 pass
             if hasattr(layer, "stop"):
-                layer.stop(profile_id)
+                layer.stop(profile_id or "")

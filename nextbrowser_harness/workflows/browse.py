@@ -16,7 +16,7 @@ def browse_site(
     url: str,
     *,
     tier: int | None = None,
-    profile_id: str = "reddit_default",
+    profile_id: str | None = None,
     headless: bool | None = None,
     screenshot: str | None = None,
     actions: list[str] | None = None,

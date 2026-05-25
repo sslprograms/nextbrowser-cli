@@ -19,6 +19,10 @@ class BrowseResult:
     screenshot_path: str | None = None
     tier_source: str | None = None
     multilogin_recommendation: dict[str, Any] | None = None
+    account_id: str | None = None
+    agent_prompt: str | None = None
+    connection: str | None = None
+    tier3_required: bool = False
 
     def to_dict(self) -> dict:
         return asdict(self)

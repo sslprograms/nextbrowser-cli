@@ -6,7 +6,9 @@ Always prefix commands with `platform.cli` from `nextbrowser status` when `nextb
 
 | Command | Purpose |
 |---------|---------|
-| `nextbrowser status` | Config, `platform.cli`, `agent_navigation` recipes |
+| `nextbrowser status` | `platform.cli`, `accounts`, `tier3_automation`, `how_to_automate` |
+| `nextbrowser account list` | Named Multilogin accounts for tier 3 |
+| `nextbrowser account add <id> --create-mlx` | Create MLX profile + register name |
 | `nextbrowser init --env` | Bootstrap from environment variables |
 | `nextbrowser scrape "<url>"` | Tiered HTTP fetch (no browser UI) |
 | `nextbrowser exec "<url>"` | Browser + JS / actions / steps file |
@@ -23,7 +25,7 @@ Always prefix commands with `platform.cli` from `nextbrowser status` when `nextb
 | `--action` | Repeatable: `--action "click:button.submit"` |
 | `--tier` | `1`, `2`, or `3` |
 | `--browser` | `native` or `multilogin` |
-| `--profile` | Profile key (e.g. `reddit_default`) |
+| `--account` / `--profile` | Named account (required for tier 3), e.g. `reddit_main` |
 | `--screenshot` | Output PNG path |
 | `--headless` | Headless native browser |
 | `--keep-open` | Leave MLX browser running (exec only) |
@@ -45,20 +47,27 @@ Always prefix commands with `platform.cli` from `nextbrowser status` when `nextb
 
 URL in JSON overrides the CLI URL argument when present.
 
-## Accounts
+## Accounts (tier 3)
 
 ```bash
-nextbrowser account add reddit_01
-nextbrowser account run reddit_01 "eval:document.title" --url "https://www.reddit.com"
+nextbrowser account list
+nextbrowser account list --json
+nextbrowser account add reddit_main --create-mlx --display-name "Reddit" --site reddit.com
+nextbrowser account add reddit_main --mlx-profile <uuid>   # link existing MLX profile
+nextbrowser exec "https://www.reddit.com" --account reddit_main --action goto --action state
+nextbrowser account run reddit_main "eval:document.title" --url "https://www.reddit.com"
 ```
+
+`--account` is required on tier-3 `exec`/`browse`. Harness uses Multilogin + CDP automatically.
 
 ## Agent skill install
 
 ```bash
-nextbrowser agent list-hosts
-nextbrowser agent install --host all --force
+nextbrowser agent install --force
 nextbrowser agent doctor
 ```
+
+See [automation.md](automation.md) for the element workflow (not host-specific).
 
 ## Environment variables
 
