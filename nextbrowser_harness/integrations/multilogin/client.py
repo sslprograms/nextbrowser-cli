@@ -376,10 +376,31 @@ class MultiloginXClient:
         }
         data = self._request("POST", f"{self.api_base}/profile/create", json=body)
         block = data.get("data") or data
-        profile_id = block.get("id") or block.get("profile_id") or block.get("uuid")
+        if isinstance(block, list) and block:
+            block = block[0]
+        profile_id = (
+            block.get("id")
+            or block.get("profile_id")
+            or block.get("uuid")
+            or (block.get("ids") or [None])[0]
+        )
         if not profile_id:
             raise MultiloginXError(f"profile/create did not return id: {data}")
-        return str(profile_id)
+        profile_id = str(profile_id)
+        # Confirm profile exists in MLX workspace (visible in Multilogin app)
+        found = self.search_profiles(folder_id=folder_id, search_text=name, limit=10)
+        if not any(
+            str(p.get("id") or p.get("profile_id") or "") == profile_id for p in found
+        ):
+            found_any = self.search_profiles(folder_id=folder_id, search_text="", limit=50)
+            if not any(
+                str(p.get("id") or p.get("profile_id") or "") == profile_id for p in found_any
+            ):
+                raise MultiloginXError(
+                    f"profile/create returned {profile_id} but profile not found in folder. "
+                    f"Response: {data}"
+                )
+        return profile_id
 
     def search_profiles(
         self,

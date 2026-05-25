@@ -87,11 +87,27 @@ class MultiloginBrowserLayer:
                 f"linux_fix={launcher.get('linux_fix')}"
             )
 
-        started = self.client.start_profile(
-            session.mlx_folder_id,
+        from nextbrowser_harness.integrations.multilogin.session import mark_keep_alive
+
+        running = self.client.profile_running(
             session.mlx_profile_id,
-            automation_type="playwright",
-            headless=headless,
+            folder_id=session.mlx_folder_id,
+        )
+        if running and running.cdp_url:
+            started = running
+        else:
+            started = self.client.start_profile(
+                session.mlx_folder_id,
+                session.mlx_profile_id,
+                automation_type="playwright",
+                headless=headless,
+            )
+        mark_keep_alive(
+            session.profile_id,
+            mlx_profile_id=session.mlx_profile_id,
+            folder_id=session.mlx_folder_id,
+            cdp_url=started.cdp_url,
+            reason="exec",
         )
         cdp = started.cdp_url
         if not cdp:
@@ -129,29 +145,40 @@ class MultiloginBrowserLayer:
         ctx._harness_cdp_url = cdp  # type: ignore[attr-defined]
         return ctx
 
-    def stop(self, profile_id: str) -> None:
+    def stop(self, profile_id: str, *, force: bool = False) -> None:
+        from nextbrowser_harness.integrations.multilogin.session import should_keep_alive
+
+        holder = self._running.pop(profile_id, None)
+        if not holder:
+            return
+        stop_mlx = force or not should_keep_alive(
+            profile_id, holder.mlx_profile_id
+        )
+        holder.close(stop_mlx_profile=stop_mlx)
+
+    def detach(self, profile_id: str) -> None:
+        """Disconnect Playwright only; leave MLX profile running (cookies persist)."""
         holder = self._running.pop(profile_id, None)
         if holder:
-            holder.close()
+            holder.close(stop_mlx_profile=False)
 
 
 @dataclass
 class StartedProfileHolder:
-    playwright: object
-    browser: object
+    playwright: object | None
+    browser: object | None
     mlx_profile_id: str
     client: MultiloginXClient
 
-    def close(self) -> None:
-        try:
-            self.browser.close()
-        except Exception:
-            pass
-        try:
-            self.playwright.stop()  # type: ignore[union-attr]
-        except Exception:
-            pass
-        try:
-            self.client.stop_profile(self.mlx_profile_id)
-        except Exception:
-            pass
+    def close(self, *, stop_mlx_profile: bool = True) -> None:
+        # Never browser.close() on CDP — that kills the MLX window and loses cookies.
+        if self.playwright is not None:
+            try:
+                self.playwright.stop()  # type: ignore[union-attr]
+            except Exception:
+                pass
+        if stop_mlx_profile:
+            try:
+                self.client.stop_profile(self.mlx_profile_id)
+            except Exception:
+                pass

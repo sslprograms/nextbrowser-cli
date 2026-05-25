@@ -1,41 +1,35 @@
-# browser-use + nextbrowser bridge
+# browser-use + nextbrowser (agent reference)
 
-## Roles
+## Agent must know
 
-| Tool | Role |
-|------|------|
-| **browser-use** | UI: `state`, `click`, `input`, `screenshot`, `eval` |
-| **nextbrowser** | MLX accounts, `browser-use connect`, scrape, tiers |
+1. Install **both** skills: `nextbrowser agent install --force --with-browser-use`
+2. **browser-use** = all UI (`state`, `click`, `input`)
+3. **nextbrowser** = accounts, connect, **chain** login, disconnect, scrape
+4. MLX browser **must stay open** during login — use **one** `browser-use chain`
+5. Ask user: account name, new login?, credentials
+6. `disconnect` only when login is finished
 
-Agents should load **both** skills:
-- `nextbrowser agent install --force --with-browser-use`
-- Or: `nextbrowser browser-use install-skill`
+## Why chain?
 
-## Connect flow
+Each separate `nextbrowser exec` or isolated `browser-use run` used to **stop** the Multilogin profile. Cookies/session only persist in MLX while that profile’s browser stays running.
 
-```bash
-nextbrowser browser-use connect --account my_account
-# → writes ~/.nextbrowser/browser_use_session.json with cdp_url
-
-nextbrowser browser-use run open "https://example.com"
-nextbrowser browser-use run state
-nextbrowser browser-use run click 5
-```
-
-Equivalent manual form (from connect JSON):
+## Commands
 
 ```bash
-browser-use --cdp-url "http://127.0.0.1:PORT" state
+nextbrowser status                    # agent_must_know in JSON
+nextbrowser account add NAME --create-mlx
+nextbrowser browser-use connect --account NAME
+nextbrowser browser-use chain open "URL" state "input N x" "click M"
+nextbrowser browser-use disconnect --account NAME
 ```
 
-## Why not nextbrowser exec?
+## Forbidden during login
 
-`nextbrowser exec --action state` duplicates browser-use poorly. The official **browser-use** CLI keeps a persistent daemon, fast `state`, and is what agents already know. nextbrowser starts **Multilogin** and hands off **CDP** to browser-use.
+- `nextbrowser exec` per click/type
+- `browser-use close`
+- `multilogin stop-all`
+- Placeholder USER/PASS
 
-## Account + credentials
+## Official browser-use skill
 
-Same as main skill — ask user for account name and login credentials before automating tier-3 sites.
-
-## Official browser-use docs
-
-https://github.com/browser-use/browser-use/blob/main/browser_use/skill_cli/README.md
+https://github.com/browser-use/browser-use/blob/main/skills/browser-use/SKILL.md

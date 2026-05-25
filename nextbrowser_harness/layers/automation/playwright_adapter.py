@@ -74,7 +74,7 @@ class PlaywrightAutomationLayer:
             return AutomationResult(success=False, output="", error=str(e))
         finally:
             if hasattr(ctx, "_harness_mlx"):
-                ctx._harness_mlx.close()
+                ctx._harness_mlx.close(stop_mlx_profile=False)
             elif hasattr(ctx, "_harness_uc"):
                 ctx._harness_uc.close()
             else:

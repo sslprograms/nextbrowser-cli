@@ -103,7 +103,17 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         help="Element lookup: indexed (state/click:N for agents) or playwright (CSS)",
     )
-    p_exec.add_argument("--keep-open", action="store_true", help="Leave browser running (MLX)")
+    p_exec.add_argument(
+        "--keep-open",
+        action="store_true",
+        default=None,
+        help="Leave MLX browser running (default on tier 3)",
+    )
+    p_exec.add_argument(
+        "--close",
+        action="store_true",
+        help="Stop MLX profile when done (default: keep open on tier 3)",
+    )
 
     p_recipes = sub.add_parser("recipes", help="List built-in site action recipes")
     p_recipes.add_argument("--json", action="store_true", help="JSON output")
@@ -155,6 +165,20 @@ def main(argv: list[str] | None = None) -> int:
     bu_sub.add_parser("session", help="Show saved browser-use CDP session JSON")
     p_bu_run = bu_sub.add_parser("run", help="Run browser-use with --cdp-url from connect")
     p_bu_run.add_argument("bu_args", nargs=argparse.REMAINDER, help="e.g. state, click 5, open URL")
+    p_bu_chain = bu_sub.add_parser(
+        "chain",
+        help="Run multiple browser-use steps in one shell (keeps MLX open)",
+    )
+    p_bu_chain.add_argument(
+        "steps",
+        nargs="+",
+        help='Steps as quoted strings, e.g. \'open "https://site.com"\' \'state\' \'click 5\'',
+    )
+    p_bu_disconnect = bu_sub.add_parser(
+        "disconnect",
+        help="Stop MLX profile when login is done (cookies already saved in profile)",
+    )
+    p_bu_disconnect.add_argument("--account", required=True)
     p_bu_skill = bu_sub.add_parser(
         "install-skill",
         help="Download official browser-use SKILL.md for your agent",
@@ -273,7 +297,7 @@ def main(argv: list[str] | None = None) -> int:
             steps_file=ns.steps_file,
             js=ns.js,
             js_file=ns.js_file,
-            keep_open=getattr(ns, "keep_open", False),
+            keep_open=False if getattr(ns, "close", False) else getattr(ns, "keep_open", None),
             recipe=recipe,
             recipe_vars=_recipe_vars(ns) or None,
             element_search=getattr(ns, "element_search", None),
@@ -515,7 +539,13 @@ def main(argv: list[str] | None = None) -> int:
                     print(json.dumps({"error": str(e), "agent_prompt": e.agent_prompt, "code": e.code}, indent=2))
                     return 1
                 raise
-            print(json.dumps(p.to_dict(), indent=2))
+            out = p.to_dict()
+            out["mlx_saved"] = True
+            out["hint"] = (
+                f"Profile {p.mlx_profile_id} should appear in Multilogin app "
+                f"(folder {p.mlx_folder_id}). Then: nextbrowser browser-use connect --account {p.account_id}"
+            )
+            print(json.dumps(out, indent=2))
             return 0
         if args.acct_cmd == "list":
             accounts = wf.list_accounts()
@@ -544,9 +574,11 @@ def main(argv: list[str] | None = None) -> int:
         from nextbrowser_harness.integrations.browser_use.bridge import (
             browser_use_doctor,
             connect_account,
+            disconnect_account,
             install_browser_use_skill,
             load_session,
             run_browser_use,
+            run_browser_use_chain,
         )
 
         if args.bu_cmd == "doctor":
@@ -594,6 +626,20 @@ def main(argv: list[str] | None = None) -> int:
                 print(json.dumps(payload, indent=2))
                 return 1
             return proc.returncode
+        if args.bu_cmd == "chain":
+            try:
+                proc = run_browser_use_chain(args.steps)
+            except (Tier3AccountError, FileNotFoundError) as e:
+                payload = {"success": False, "error": str(e)}
+                if isinstance(e, Tier3AccountError):
+                    payload["agent_prompt"] = e.agent_prompt
+                print(json.dumps(payload, indent=2))
+                return 1
+            return proc.returncode
+        if args.bu_cmd == "disconnect":
+            out = disconnect_account(harness.config, args.account)
+            print(json.dumps(out, indent=2))
+            return 0
 
     parser.print_help()
     return 1

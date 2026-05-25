@@ -44,7 +44,9 @@ def test_skill_teaches_universal_automation():
     root = bundled_skill_dir()
     body = (root / "SKILL.md").read_text(encoding="utf-8")
     assert "browser-use" in body
-    assert "browser-use connect" in body
+    assert "agent must know" in body.lower() or "must know" in body.lower()
+    assert "browser-use chain" in body
+    assert "disconnect" in body
     assert "references/browser-use-bridge.md" in body
     assert "Host paths" not in body
     assert (root / "references" / "browser-use-bridge.md").is_file()

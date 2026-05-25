@@ -125,28 +125,98 @@ def connect_account(
         "browser_use_prefix": prefix,
         "browser_use_bin": bu,
     }
+    session["keep_alive"] = True
     save_session(session)
+
+    from nextbrowser_harness.integrations.multilogin.session import mark_keep_alive
+
+    mark_keep_alive(
+        account_id,
+        mlx_profile_id=mlx_profile_id,
+        folder_id=folder_id,
+        cdp_url=cdp,
+        reason="browser-use",
+    )
     AccountRegistry(config).touch_run(account_id)
 
     return {
         "success": True,
         "account_id": account_id,
+        "mlx_profile_id": mlx_profile_id,
         "cdp_url": cdp,
         "connection": "cdp",
+        "keep_alive": True,
         "browser_use_prefix": prefix,
         "browser_use_bin": bu,
         "next_commands": [
-            f'{prefix} open "<url>"',
-            f"{prefix} state",
-            f'{prefix} input <index> "text"',
-            f"{prefix} click <index>",
+            f'{prefix} open "<url>" && {prefix} state && {prefix} input N "text" && {prefix} click N',
+            'nextbrowser browser-use chain open "<url>" state "input 3 user" "click 5"',
+        ],
+        "agent_must_know": [
+            "MLX browser is open and will STAY open until browser-use disconnect.",
+            "Run the full login in ONE command: nextbrowser browser-use chain open URL state input click.",
+            "Do NOT run separate exec/run per field. Do NOT browser-use close or multilogin stop-all.",
+            f"When login is complete: nextbrowser browser-use disconnect --account {account_id}",
         ],
         "agent_prompt": (
-            f"MLX profile '{account_id}' is running. Use **browser-use** for UI (not nextbrowser exec state). "
-            f'Run: `{prefix} open "<url>"` then `{prefix} state` then click/input by index. '
-            "Load the browser-use skill if available."
+            f"MLX profile '{account_id}' is running (keep_alive). "
+            f"Login in ONE chain: `nextbrowser browser-use chain open \"<url>\" state \"input N user\" \"click M\"`. "
+            "Do NOT split into separate exec/run steps. Do NOT browser-use close until done. "
+            f"Then: `nextbrowser browser-use disconnect --account {account_id}`"
         ),
     }
+
+
+def disconnect_account(
+    config: HarnessConfig,
+    account_id: str,
+) -> dict[str, Any]:
+    """Stop MLX profile and clear keep-alive (call when login flow is fully done)."""
+    from nextbrowser_harness.integrations.multilogin.session import clear_keep_alive
+
+    sess = load_session() or {}
+    mlx_id = sess.get("mlx_profile_id") or ""
+    if account_id:
+        acc = AccountRegistry(config).get(account_id)
+        if acc:
+            mlx_id = acc.mlx_profile_id
+    if mlx_id:
+        try:
+            MultiloginXClient().stop_profile(mlx_id)
+        except Exception:
+            pass
+    clear_keep_alive(account_id or None)
+    path = _session_path()
+    if path.is_file():
+        path.unlink(missing_ok=True)
+    return {"success": True, "account_id": account_id, "stopped_mlx_profile": mlx_id}
+
+
+def run_browser_use_chain(
+    parts: list[str],
+    *,
+    session: dict[str, Any] | None = None,
+) -> subprocess.CompletedProcess:
+    """Run multiple browser-use subcommands in one shell chain (browser stays open)."""
+    import shlex
+
+    sess = session or load_session()
+    if not sess or not sess.get("cdp_url"):
+        raise Tier3AccountError(
+            "No browser-use CDP session. Run: nextbrowser browser-use connect --account <name>",
+            agent_prompt="Run browser-use connect first.",
+            code="browser_use_session_missing",
+        )
+    bin_path = browser_use_bin()
+    if not bin_path:
+        raise FileNotFoundError("browser-use CLI not found")
+    cdp = sess["cdp_url"]
+    segments = []
+    for part in parts:
+        tokens = shlex.split(part, posix=(os.name != "nt"))
+        segments.append(shlex.join([bin_path, "--cdp-url", cdp, *tokens]))
+    script = " && ".join(segments)
+    return subprocess.run(script, shell=True)
 
 
 def run_browser_use(

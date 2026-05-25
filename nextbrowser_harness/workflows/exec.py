@@ -104,6 +104,8 @@ def exec_site(
         specs.insert(0, ActionSpec.parse("goto"))
 
     headful = use_tier >= 3
+    if keep_open is None:
+        keep_open = use_tier >= 3 or run_config.browser == "multilogin"
     if headless is None:
         if run_config.browser == "multilogin":
             headless = False
@@ -189,17 +191,20 @@ def exec_site(
             tier3_required=bool(tier3_meta.get("tier3_required")),
         )
     finally:
-        if not keep_open and ctx is not None:
+        if ctx is not None:
             try:
-                if hasattr(ctx, "_harness_mlx"):
-                    ctx._harness_mlx.close()
-                elif hasattr(ctx, "_harness_uc"):
-                    ctx._harness_uc.close()
-                else:
-                    ctx.close()
-                    if hasattr(ctx, "_harness_playwright"):
-                        ctx._harness_playwright.stop()
+                if keep_open and hasattr(layer, "detach"):
+                    layer.detach(profile_id or "")
+                elif not keep_open:
+                    if hasattr(ctx, "_harness_mlx"):
+                        ctx._harness_mlx.close(stop_mlx_profile=True)
+                    elif hasattr(ctx, "_harness_uc"):
+                        ctx._harness_uc.close()
+                    else:
+                        ctx.close()
+                        if hasattr(ctx, "_harness_playwright"):
+                            ctx._harness_playwright.stop()
+                    if hasattr(layer, "stop"):
+                        layer.stop(profile_id or "", force=True)
             except Exception:
                 pass
-            if hasattr(layer, "stop"):
-                layer.stop(profile_id or "")

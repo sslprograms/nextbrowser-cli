@@ -1,154 +1,94 @@
 ---
 name: nextbrowser-harness
 description: >-
-  Pairs with the browser-use skill for UI automation. nextbrowser manages Multilogin
-  accounts (tier 3), connects CDP to browser-use, and handles scrape/tier lookup.
-  Use browser-use for state/click/input — not nextbrowser exec. Ask user for account
-  and credentials when needed.
-version: 1.2.0
+  Multilogin accounts + CDP for browser-use. Agents MUST keep MLX browser open during
+  login (use browser-use chain), ask user for account/credentials, create profiles with
+  account add --create-mlx, disconnect when done. UI via browser-use skill only.
+version: 1.3.0
 license: MIT
 homepage: https://github.com/sslprograms/nextbrowser-cli
 user-invocable: true
 compatibility: >-
-  Python 3.10+. Requires browser-use CLI + Multilogin X for tier-3. Install both skills.
+  Python 3.10+. browser-use CLI + Multilogin X. Install both skills via agent install --with-browser-use.
 platforms:
   - macos
   - linux
   - windows
 ---
 
-# Nextbrowser Harness + browser-use
+# Nextbrowser + browser-use
 
-**UI automation = [browser-use](https://github.com/browser-use/browser-use) skill.**  
-**MLX accounts + CDP = nextbrowser.**
+**Read this first.** Run `nextbrowser status` and follow `agent_must_know` in the JSON.
 
-Do not use `nextbrowser exec --action state` for clicking/typing. That path is deprecated for agents. Use **browser-use** after connecting Multilogin CDP.
+Load the **[browser-use](https://github.com/browser-use/browser-use) skill** for UI. This skill covers Multilogin accounts and keeping the browser open.
 
-## Install both skills
+## Agent must know (non-negotiable)
+
+1. **UI = browser-use only** — not `nextbrowser exec --action state` / `click`.
+2. **Ask the user** before tier-3 work: which account? new login? username/password?
+3. **Create MLX profile:** `nextbrowser account add <name> --create-mlx` — check `mlx_profile_id` in JSON and in Multilogin app.
+4. **Connect once:** `nextbrowser browser-use connect --account <name>` — browser **stays open**.
+5. **Whole login in ONE chain** — cookies save in Multilogin only if the profile is not closed between steps:
+   ```bash
+   nextbrowser browser-use chain open "<url>" state "input 12 REAL_USER" "input 15 REAL_PASS" "click 20"
+   ```
+6. **Never during login:** `browser-use close`, `multilogin stop-all`, separate `exec`/`run` per field.
+7. **When done:** `nextbrowser browser-use disconnect --account <name>`.
+8. **Scrape only:** `nextbrowser scrape "<url>" --json` (no account).
+
+## Quick start
 
 ```bash
-pip install -e ".[playwright,undetected]"
-playwright install chromium
-nextbrowser init --env
-nextbrowser multilogin setup-wizard
-
-# browser-use CLI (required for UI)
-curl -fsSL https://browser-use.com/cli/install.sh | bash
-browser-use doctor
-
-# Both agent skills
+nextbrowser status
 nextbrowser agent install --force --with-browser-use
+nextbrowser multilogin setup-wizard
+curl -fsSL https://browser-use.com/cli/install.sh | bash
 ```
 
-Load the **browser-use** skill in your agent (state / click / input commands). This skill covers MLX + accounts only.
-
-## Tier 3 workflow (the one that works)
-
-### 1. Ask the user
-
-- **Which account?** → `nextbrowser account list`
-- **New login?** → `nextbrowser account add <name> --create-mlx`
-- **Need password?** → ask user (never use placeholders)
-
-### 2. Connect Multilogin → browser-use (CDP)
+## Full login flow (copy for agents)
 
 ```bash
+# 1. Ask user which account; or create:
+nextbrowser account add reddit_main --create-mlx --display-name "Reddit Main"
+
+# 2. Connect — MLX stays open
 nextbrowser browser-use connect --account reddit_main
+
+# 3. ONE chain (get indices from state step; credentials from user)
+nextbrowser browser-use chain open "https://www.reddit.com/login" state "input 12 USER" "input 15 PASS" "click 20"
+
+# 4. Only when user confirms login is complete
+nextbrowser browser-use disconnect --account reddit_main
 ```
 
-JSON returns `cdp_url` and `browser_use_prefix`, e.g.:
+## Command roles
 
-```bash
-browser-use --cdp-url "http://127.0.0.1:12345" open "https://www.reddit.com"
-browser-use --cdp-url "http://127.0.0.1:12345" state
-browser-use --cdp-url "http://127.0.0.1:12345" input 12 "username"
-browser-use --cdp-url "http://127.0.0.1:12345" click 20
-```
-
-**Shorthand** (CDP saved from connect):
-
-```bash
-nextbrowser browser-use run open "https://www.reddit.com"
-nextbrowser browser-use run state
-nextbrowser browser-use run click 20
-```
-
-Follow the **browser-use skill** for full command list (`state`, `click`, `input`, `screenshot`, `eval`, …).
-
-### 3. First login on a new account
-
-```bash
-nextbrowser account add my_site --create-mlx --site example.com
-nextbrowser browser-use connect --account my_site
-browser-use --cdp-url "<cdp from connect>" open "https://example.com/login"
-browser-use --cdp-url "<cdp>" state
-# ask user for credentials →
-browser-use --cdp-url "<cdp>" input 2 "user@mail.com"
-browser-use --cdp-url "<cdp>" input 3 "password"
-browser-use --cdp-url "<cdp>" click 1
-```
-
-Session cookies persist in the Multilogin profile.
-
-## What nextbrowser is for
-
-| Task | Command |
+| Tool | Use for |
 |------|---------|
-| Status / accounts / CDP info | `nextbrowser status` |
-| List accounts | `nextbrowser account list` |
-| Create MLX profile + name | `nextbrowser account add <name> --create-mlx` |
-| Connect CDP for browser-use | `nextbrowser browser-use connect --account <name>` |
-| Passthrough browser-use | `nextbrowser browser-use run state` |
-| Read-only HTML | `nextbrowser scrape "<url>" --json` |
-| MLX setup | `nextbrowser multilogin setup-wizard` |
+| **nextbrowser** | `status`, `account list/add`, `browser-use connect/chain/disconnect`, `scrape`, MLX setup |
+| **browser-use** | `state`, `click`, `input`, `screenshot`, `eval` (after connect) |
 
-## What browser-use is for
-
-All page interaction — same as the official browser-use skill:
-
-```bash
-browser-use state
-browser-use click 5
-browser-use input 3 "text"
-browser-use screenshot
-browser-use eval "document.title"
-```
-
-Always run `state` first to get element indices.
-
-## Live reference
+## Live rules from CLI
 
 ```bash
 nextbrowser status
 ```
 
-Read `browser_use`, `accounts`, `tier3_automation`, `platform.cli`.
+Fields: `agent_must_know`, `browser_use`, `accounts`, `agent_navigation`, `how_to_automate`.
 
 ## Hard rules
 
-1. **browser-use** for UI — **nextbrowser** for MLX connect + accounts + scrape.
-2. Run `browser-use connect` (via nextbrowser) before `state` / `click`.
-3. Ask user which account and for credentials when needed.
-4. Do not write Playwright Python.
+- Chain login — do not split into multiple exec/run commands.
+- Keep browser open until `disconnect`.
+- Real credentials from user only.
+- No Playwright Python.
 
 ## Troubleshooting
 
 | Problem | Fix |
 |---------|-----|
-| browser-use not found | `curl -fsSL https://browser-use.com/cli/install.sh \| bash` |
-| No CDP session | `nextbrowser browser-use connect --account <name>` |
-| No account | `nextbrowser account add <name> --create-mlx` |
-| MLX down | `nextbrowser multilogin doctor` |
-| UI commands fail | `browser-use close` then reconnect |
+| Browser closes mid-login | Use `browser-use chain`, not per-step exec |
+| Profile missing in MLX | `account add ... --create-mlx` again; `multilogin doctor` |
+| No CDP | `browser-use connect --account <name>` first |
 
-Details: [references/browser-use-bridge.md](references/browser-use-bridge.md) · [references/troubleshooting.md](references/troubleshooting.md)
-
-## Verify
-
-```bash
-browser-use doctor
-nextbrowser browser-use doctor
-nextbrowser account list
-nextbrowser browser-use connect --account <name>
-nextbrowser browser-use run state
-```
+[references/browser-use-bridge.md](references/browser-use-bridge.md) · [references/troubleshooting.md](references/troubleshooting.md)
