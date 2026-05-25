@@ -28,7 +28,7 @@ def test_bundled_skill_layout():
     assert root.name == "nextbrowser-harness"
     assert (root / "SKILL.md").is_file()
     assert (root / "references" / "commands.md").is_file()
-    assert (root / "references" / "automation.md").is_file()
+    assert (root / "references" / "browser-use-bridge.md").is_file()
 
 
 def test_skill_frontmatter_agentskills():
@@ -43,14 +43,11 @@ def test_skill_frontmatter_agentskills():
 def test_skill_teaches_universal_automation():
     root = bundled_skill_dir()
     body = (root / "SKILL.md").read_text(encoding="utf-8")
-    assert "references/automation.md" in body
-    assert "--account" in body
-    assert "agent_prompt" in body
-    assert "CDP" in body or "cdp" in body
-    assert "account add" in body
-    assert "Which account" in body or "which account" in body
+    assert "browser-use" in body
+    assert "browser-use connect" in body
+    assert "references/browser-use-bridge.md" in body
     assert "Host paths" not in body
-    assert (root / "references" / "automation.md").is_file()
+    assert (root / "references" / "browser-use-bridge.md").is_file()
 
 
 def test_skill_no_secret_env_prompts():

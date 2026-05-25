@@ -142,6 +142,29 @@ def main(argv: list[str] | None = None) -> int:
     p_acct_run.add_argument("--js", default=None, help="Shorthand: eval:<javascript>")
     p_acct_run.add_argument("--json", action="store_true", default=True)
 
+    p_bu = sub.add_parser(
+        "browser-use",
+        aliases=["bu"],
+        help="Connect Multilogin CDP to browser-use CLI (use browser-use skill for UI)",
+    )
+    bu_sub = p_bu.add_subparsers(dest="bu_cmd", required=True)
+    p_bu_connect = bu_sub.add_parser("connect", help="Start MLX profile; save CDP for browser-use")
+    p_bu_connect.add_argument("--account", required=True, help="Registered account name")
+    p_bu_connect.add_argument("--headless", action="store_true")
+    bu_sub.add_parser("doctor", help="Check browser-use CLI + saved CDP session")
+    bu_sub.add_parser("session", help="Show saved browser-use CDP session JSON")
+    p_bu_run = bu_sub.add_parser("run", help="Run browser-use with --cdp-url from connect")
+    p_bu_run.add_argument("bu_args", nargs=argparse.REMAINDER, help="e.g. state, click 5, open URL")
+    p_bu_skill = bu_sub.add_parser(
+        "install-skill",
+        help="Download official browser-use SKILL.md for your agent",
+    )
+    p_bu_skill.add_argument(
+        "--dest",
+        default=None,
+        help="Skill dir (default: ~/.cursor/skills/browser-use)",
+    )
+
     p_mlx = sub.add_parser("multilogin", help="Multilogin X API (see Postman docs)")
     mlx_sub = p_mlx.add_subparsers(dest="mlx_cmd", required=True)
     p_mlx_signin = mlx_sub.add_parser("signin", help="Sign in and save tokens")
@@ -194,6 +217,11 @@ def main(argv: list[str] | None = None) -> int:
         )
         p_inst.add_argument("--workspace", type=str, default=None)
         p_inst.add_argument("--force", action="store_true")
+        p_inst.add_argument(
+            "--with-browser-use",
+            action="store_true",
+            help="Also install official browser-use skill (recommended for UI automation)",
+        )
         subp.add_parser("doctor", help="Check CLI, bundled skill, and install paths for all hosts")
         subp.add_parser("list-hosts", help="List agent hosts (OpenClaw, Claude Code, Cursor, …)")
         return p
@@ -336,6 +364,11 @@ def main(argv: list[str] | None = None) -> int:
                 print(str(e))
                 return 1
             print(print_post_install(paths))
+            if getattr(args, "with_browser_use", False):
+                from nextbrowser_harness.integrations.browser_use.bridge import install_browser_use_skill
+
+                bu_path = install_browser_use_skill()
+                print(f"\nInstalled browser-use skill: {bu_path}")
             return 0
 
     if args.command == "multilogin":
@@ -505,6 +538,62 @@ def main(argv: list[str] | None = None) -> int:
             out = harness.run_accounts(args.account_id, task, url=args.url)
             print(json.dumps(out, indent=2))
             return 0 if out.get("success") else 1
+
+    if args.command in ("browser-use", "bu"):
+        from nextbrowser_harness.accounts.registry import Tier3AccountError
+        from nextbrowser_harness.integrations.browser_use.bridge import (
+            browser_use_doctor,
+            connect_account,
+            install_browser_use_skill,
+            load_session,
+            run_browser_use,
+        )
+
+        if args.bu_cmd == "doctor":
+            print(json.dumps(browser_use_doctor(), indent=2))
+            return 0
+        if args.bu_cmd == "session":
+            sess = load_session()
+            print(json.dumps(sess or {}, indent=2))
+            return 0 if sess else 1
+        if args.bu_cmd == "install-skill":
+            from pathlib import Path
+
+            dest = Path(args.dest).expanduser() if args.dest else None
+            path = install_browser_use_skill(dest)
+            print(f"Installed browser-use skill: {path}")
+            print("Start a new agent session. Use browser-use skill for state/click/input.")
+            return 0
+        if args.bu_cmd == "connect":
+            try:
+                out = connect_account(
+                    harness.config,
+                    args.account,
+                    headless=args.headless,
+                )
+            except (Tier3AccountError, Exception) as e:
+                payload = {"success": False, "error": str(e)}
+                if isinstance(e, Tier3AccountError):
+                    payload["agent_prompt"] = e.agent_prompt
+                    payload["code"] = e.code
+                print(json.dumps(payload, indent=2))
+                return 1
+            print(json.dumps(out, indent=2))
+            return 0
+        if args.bu_cmd == "run":
+            bu_args = [a for a in (args.bu_args or []) if a != "--"]
+            if not bu_args:
+                print("Usage: nextbrowser browser-use run state")
+                return 1
+            try:
+                proc = run_browser_use(bu_args)
+            except (Tier3AccountError, FileNotFoundError) as e:
+                payload = {"success": False, "error": str(e)}
+                if isinstance(e, Tier3AccountError):
+                    payload["agent_prompt"] = e.agent_prompt
+                print(json.dumps(payload, indent=2))
+                return 1
+            return proc.returncode
 
     parser.print_help()
     return 1

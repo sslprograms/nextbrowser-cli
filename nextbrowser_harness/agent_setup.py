@@ -145,10 +145,13 @@ def print_post_install(paths: list[tuple[str, Path]]) -> str:
         "Bootstrap:",
         f"  {cli} init --env",
         "",
-        "Automation guide (any host):",
-        f"  {cli} status   # read how_to_automate + agent_navigation",
+        "UI automation (use browser-use skill):",
+        "  curl -fsSL https://browser-use.com/cli/install.sh | bash",
+        f"  {cli} agent install --force --with-browser-use",
+        f"  {cli} browser-use connect --account <name>",
+        f"  {cli} browser-use run state",
         "",
-        "Multilogin X (optional):",
+        "Multilogin X:",
         f"  {mlx_setup_wizard_command()}",
     ])
     return "\n".join(lines)

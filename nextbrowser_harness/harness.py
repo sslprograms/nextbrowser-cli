@@ -4,6 +4,7 @@ from pathlib import Path
 
 from nextbrowser_harness.config import HarnessConfig, resolve_config_path
 from nextbrowser_harness.accounts.registry import AccountRegistry
+from nextbrowser_harness.integrations.browser_use.bridge import browser_use_doctor, load_session
 from nextbrowser_harness.agent_navigation import agent_automation_guide, agent_command_recipes
 from nextbrowser_harness.platform_paths import cli_command_string, platform_status
 from nextbrowser_harness.onboarding import onboard_from_env, onboard_interactive
@@ -89,6 +90,14 @@ class Harness:
             ),
             "tier3_automation": guide.get("tier3_policy"),
             "accounts": AccountRegistry(self.config).agent_summary(),
+            "browser_use": {
+                "primary_ui": True,
+                "doctor": browser_use_doctor(),
+                "session": load_session(),
+                "connect": f"{cli} browser-use connect --account <name>",
+                "run": f"{cli} browser-use run state",
+                "install_skill": f"{cli} browser-use install-skill",
+            },
             "multilogin_recommendation": tier_hint,
             "platform": platform_status(),
             "agent_navigation": recipes,

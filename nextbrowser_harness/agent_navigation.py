@@ -1,71 +1,49 @@
-"""Agent-facing automation API — tier 3 = Multilogin account + CDP + user prompts."""
+"""Agent-facing automation — browser-use skill for UI, nextbrowser for MLX accounts + CDP."""
 
 from __future__ import annotations
 
 AGENT_NAVIGATION_POLICY = """
-Use the nextbrowser CLI only (see platform.cli from `nextbrowser status`). Do NOT write Playwright/Puppeteer Python unless the user asks.
+Use **browser-use** CLI for all UI automation (state / click / input) — load the browser-use skill.
+Use **nextbrowser** for Multilogin accounts, CDP connect, scrape, and tier lookup.
 
-Tier 3 browser automation (exec / browse when tier is 3):
-  - Requires a **named Multilogin account** (--account or --profile). Browser connects over **CDP** to an MLX profile.
-  - Before the first run: ask **Which account should I use?** or **Should I add a new login?**
-  - New login: `account add <name> --create-mlx` → one-time login via exec (state/click/type) → cookies persist in MLX.
-  - If you need username/password and do not have them: **ask the user** — never guess or use placeholders.
+Tier 3 flow:
+  1. Ask user which account (or create: nextbrowser account add <name> --create-mlx)
+  2. {cli} browser-use connect --account <name>   # starts MLX, saves CDP
+  3. browser-use --cdp-url <cdp> open "<url>" && browser-use --cdp-url <cdp> state
+  4. browser-use click N / input N "text"  (indices from state)
+  Or shorthand: {cli} browser-use run state  (CDP injected from connect)
 
-Indexed UI flow (after account is chosen):
-  1. {cli} exec "<url>" --account <name> --action goto --action state
-  2. Read [N] from JSON `state` → detail
-  3. {cli} exec "<url>" --account <name> --action "type:N|value" --action "click:N"
-  4. Re-run `state` after navigation
-
-Read-only (no MLX account): {cli} scrape "<url>" --json` (any tier, no browser)
+Do NOT use nextbrowser exec state/click for UI — use browser-use.
+Do NOT write Playwright Python.
+Ask user for credentials when login is needed and unknown.
 """.strip()
 
 
 def agent_automation_guide() -> dict:
-    """Single machine-readable guide — returned in `nextbrowser status`."""
     return {
+        "primary_ui": "browser-use",
+        "browser_use_skill": "Install: nextbrowser browser-use install-skill (or load browser-use skill)",
         "tier3_policy": {
-            "required": True,
-            "browser": "multilogin",
+            "mlx": True,
             "connection": "cdp",
-            "account_flag": "--account <name> (alias: --profile)",
-            "ask_user_before_automate": [
-                "Which saved account should I use? (account list)",
-                "Or should I create a new login? (account add <name> --create-mlx)",
-            ],
-            "ask_user_for_credentials_when": [
-                "Recipe or actions need login and username/password are missing or placeholders",
-            ],
+            "connect": "{cli} browser-use connect --account <name>",
+            "ui_commands": "browser-use state | click N | input N \"text\"",
         },
         "workflow": [
-            "Run `{cli} status` — read `accounts`, `how_to_automate`, `platform.cli`.",
-            "MLX once: `{cli} multilogin setup-wizard` and `{cli} multilogin doctor`.",
-            "List accounts: `{cli} account list`.",
-            "New account: `{cli} account add <name> --create-mlx --site reddit.com`.",
-            "Ask user which account (or new login) before tier-3 exec.",
-            "If login needed and credentials unknown: ask user for username/password.",
-            "Automate: `{cli} exec \"<url>\" --account <name> --action goto --action state`.",
-            "Use indices from `state`: `--action \"type:N|text\"` `--action \"click:N\"`.",
-            "Re-run `state` after navigation. Connection stays CDP via Multilogin.",
-            "Read-only: `{cli} scrape \"<url>\" --json` (no account required).",
+            "Install skills: `{cli} agent install --force --with-browser-use`",
+            "MLX once: `{cli} multilogin setup-wizard`",
+            "Ask user: which account? `{cli} account list`",
+            "New login: `{cli} account add <name> --create-mlx`",
+            "Connect CDP: `{cli} browser-use connect --account <name>`",
+            "UI loop: `browser-use --cdp-url <cdp> open URL` → `state` → `click` / `input`",
+            "Or: `{cli} browser-use run state` (uses saved CDP from connect)",
+            "Read-only: `{cli} scrape URL --json`",
+            "Ask user for credentials before login if unknown.",
         ],
-        "element_search": {
-            "default": "indexed",
-            "indexed": "state → pick N → click:N / type:N|value (CDP session)",
-            "playwright": "CSS only when selectors are known",
-        },
-        "commands": {
-            "status": "{cli} status",
-            "account_list": "{cli} account list",
-            "account_add": "{cli} account add <name> --create-mlx",
-            "exec": '{cli} exec "<url>" --account <name> --action goto --action state',
-            "scrape": '{cli} scrape "<url>" --json',
-        },
         "never": [
-            "Do not run tier-3 exec without --account <registered_name>.",
-            "Do not invent Playwright/Python browser scripts.",
-            "Do not guess login credentials — ask the user.",
-            "Do not edit ~/.nextbrowser/multilogin_tokens.yaml by hand.",
+            "Do not use nextbrowser exec --action state for UI (use browser-use)",
+            "Do not guess credentials",
+            "Do not edit multilogin_tokens.yaml by hand",
         ],
     }
 
@@ -75,28 +53,13 @@ def agent_command_recipes() -> dict:
     return {
         "policy": AGENT_NAVIGATION_POLICY,
         "automation": guide,
+        "browser_use_connect": "{cli} browser-use connect --account <name>",
+        "browser_use_state": "{cli} browser-use run state",
+        "browser_use_open": "{cli} browser-use run open <url>",
+        "browser_use_install_skill": "{cli} browser-use install-skill",
         "account_list": "{cli} account list",
-        "account_add_mlx": "{cli} account add <name> --create-mlx --display-name \"My Site\"",
+        "account_add": "{cli} account add <name> --create-mlx",
         "read_page": "{cli} scrape \"<url>\" --json",
-        "open_and_list_elements": '{cli} exec "<url>" --account <name> --action goto --action state',
-        "click_by_index": '{cli} exec "<url>" --account <name> --action "click:INDEX"',
-        "type_by_index": '{cli} exec "<url>" --account <name> --action "type:INDEX|VALUE"',
-        "login_recipe": (
-            '{cli} exec "<url>" --account <name> --recipe site.com/login '
-            '--var username=FROM_USER --var password=FROM_USER'
-        ),
         "mlx_setup": "{cli} multilogin setup-wizard",
         "mlx_doctor": "{cli} multilogin doctor",
-        "install_skill": "{cli} agent install --force",
-        "action_prefixes": [
-            "state",
-            "find:",
-            "type:",
-            "fill:",
-            "click:",
-            "wait-for:",
-            "eval:",
-            "goto",
-            "logged-in",
-        ],
     }
