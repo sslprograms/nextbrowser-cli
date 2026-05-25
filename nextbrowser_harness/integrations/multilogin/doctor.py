@@ -14,9 +14,13 @@ from nextbrowser_harness.integrations.multilogin.client import (
     MultiloginXClient,
 )
 from nextbrowser_harness.integrations.multilogin.platform_hints import (
+    ensure_display_linux,
+    mlx_install_check,
     mlx_launcher_unreachable_message,
     mlx_setup_script_hint,
+    mlx_setup_wizard_command,
     mlx_start_desktop_hint,
+    xvfb_available,
 )
 from nextbrowser_harness.platform_paths import system_name
 
@@ -44,12 +48,20 @@ def mlx_doctor_report(client: MultiloginXClient | None = None) -> dict[str, Any]
     profile_id = os.getenv("MULTILOGIN_PROFILE_ID", "")
     profile_reddit = os.getenv("MULTILOGIN_PROFILE_REDDIT_DEFAULT", "")
 
+    install = mlx_install_check()
+    display = ensure_display_linux()
+
     report: dict[str, Any] = {
         "os": system_name(),
         "launcher_url": launcher_url,
         "launcher_reachable": False,
         "launcher_status": None,
         "launcher_error": None,
+        "mlx_app_installed": install.get("installed"),
+        "mlx_checked_paths": install.get("checked_paths", []),
+        "display_ok": display.get("display_ok"),
+        "xvfb_available": xvfb_available() if display.get("needed") else None,
+        "display_hint": display.get("install_hint") or None,
         "token_file": _token_file_status(client.token_path),
         "env": {
             "MULTILOGIN_EMAIL": bool(os.getenv("MULTILOGIN_EMAIL")),
@@ -65,6 +77,7 @@ def mlx_doctor_report(client: MultiloginXClient | None = None) -> dict[str, Any]
         "profile_key_reddit_default": bool(profile_reddit or profile_id),
         "ok": False,
         "next_steps": [],
+        "setup_wizard_command": mlx_setup_wizard_command(),
         "setup_script": mlx_setup_script_hint(),
         "start_desktop_hint": mlx_start_desktop_hint(),
     }
@@ -83,20 +96,28 @@ def mlx_doctor_report(client: MultiloginXClient | None = None) -> dict[str, Any]
         report["api_error"] = str(e)
 
     steps: list[str] = []
+    if not report["mlx_app_installed"]:
+        steps.append(
+            f"Install Multilogin X desktop app from {install.get('download_url', 'https://multilogin.com')}, "
+            f"then run: {mlx_setup_wizard_command()}"
+        )
+    if display.get("needed") and not display.get("display_ok"):
+        steps.append(display.get("install_hint") or "Install xvfb for headless Linux MLX")
     if not report["launcher_reachable"]:
         steps.append(mlx_launcher_unreachable_message())
     if not report["api_token_ok"]:
         steps.append(
-            "Auth: run `nextbrowser multilogin signin` then `nextbrowser multilogin automation-token`. "
+            f"Auth: run `{mlx_setup_wizard_command()}` or "
+            "`nextbrowser multilogin signin` then `nextbrowser multilogin automation-token`. "
             "Do NOT edit ~/.nextbrowser/multilogin_tokens.yaml by hand."
         )
     elif not report["token_file"].get("has_automation_token"):
         steps.append("Run: nextbrowser multilogin automation-token")
     if not folder_id:
-        steps.append("Run: nextbrowser multilogin folders — set MULTILOGIN_FOLDER_ID")
+        steps.append("Run setup-wizard or: nextbrowser multilogin folders — set MULTILOGIN_FOLDER_ID")
     if not profile_id:
         steps.append(
-            "Run: nextbrowser multilogin profiles --folder-id $MULTILOGIN_FOLDER_ID — "
+            "Run setup-wizard or: nextbrowser multilogin profiles --folder-id $MULTILOGIN_FOLDER_ID — "
             "set MULTILOGIN_PROFILE_ID"
         )
     if not profile_reddit and profile_id:
@@ -114,6 +135,7 @@ def mlx_doctor_report(client: MultiloginXClient | None = None) -> dict[str, Any]
         and bool(folder_id)
         and bool(profile_id)
         and report["env"].get("NEXTBROWSER_BROWSER") == "multilogin"
+        and (report["display_ok"] is not False)
     )
     return report
 
@@ -125,6 +147,7 @@ def mlx_print_env_snippet() -> str:
     lines = [
         "NEXTBROWSER_BROWSER=multilogin",
         "NEXTBROWSER_AUTOMATION=playwright",
+        "NEXTBROWSER_PROXY=none",
     ]
     if folder:
         lines.append(f"MULTILOGIN_FOLDER_ID={folder}")

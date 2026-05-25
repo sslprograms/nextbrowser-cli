@@ -1,0 +1,13 @@
+{
+  "url": "https://pixelscan.net",
+  "actions": [
+    "goto",
+    "wait_load",
+    "wait:3000",
+    "eval:(() => { const nodes = [...document.querySelectorAll('button, a, [role=button], .btn, [class*=\"scan\"]')]; const btn = nodes.find(el => /scan my browser/i.test((el.textContent || '').trim())); if (!btn) throw new Error('Scan my browser button not found'); btn.click(); return 'clicked'; })()",
+    "wait:12000",
+    "screenshot",
+    "title",
+    "final_url"
+  ]
+}

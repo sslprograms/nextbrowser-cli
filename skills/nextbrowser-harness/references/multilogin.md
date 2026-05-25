@@ -3,20 +3,23 @@
 ## Rules for AI agents (read first)
 
 1. **Never** edit `~/.nextbrowser/multilogin_tokens.yaml` with Python, `sed`, or patch scripts.
-2. **Never** delete `automation_token` from the token file to “force refresh” — run CLI commands instead.
-3. **Setup script by OS:**
-   - **Windows:** `.\scripts\setup-multilogin.ps1`
-   - **Linux / macOS:** `./scripts/setup-multilogin.sh`
-   - Or: `nextbrowser multilogin setup` (prints the right path)
+2. **Never** store Multilogin passwords in `.env`, yaml, or skill metadata — only email in `.env`.
+3. **Always** run `nextbrowser multilogin setup-wizard` for MLX setup (or the platform script below).
 4. **Always** run `nextbrowser multilogin doctor` before `exec --browser multilogin`; follow `next_steps` in JSON.
 5. **`--profile reddit_default`** requires `MULTILOGIN_PROFILE_REDDIT_DEFAULT=<uuid>` (or use `--profile default` with only `MULTILOGIN_PROFILE_ID`).
 
-## Guided setup
+## Guided setup (recommended)
 
-| OS | Command |
+```bash
+nextbrowser multilogin setup-wizard
+```
+
+| OS | Script (delegates to setup-wizard) |
 |----|---------|
 | Windows | `.\scripts\setup-multilogin.ps1` |
 | Linux / macOS | `chmod +x scripts/setup-multilogin.sh && ./scripts/setup-multilogin.sh` |
+
+Or: `nextbrowser multilogin setup` (prints platform-specific hints).
 
 ## Start MLX desktop app
 
@@ -24,37 +27,46 @@
 |----|-----|
 | Windows | `%LOCALAPPDATA%\Multilogin X App\MLXDesktopApp.exe` |
 | macOS | `open -a "Multilogin X App"` or install from multilogin.com |
-| Linux | App menu, or set `MULTILOGIN_APP_EXE` (e.g. `/opt/mlx/desktop.bin`) |
+| Linux | App menu, or `MULTILOGIN_APP_EXE` (e.g. `/opt/mlx/desktop.bin`); headless: `sudo apt install xvfb` |
 
 ## Manual CLI flow
 
 ```bash
-nextbrowser multilogin setup
+nextbrowser multilogin setup-wizard
+nextbrowser multilogin doctor
+```
+
+Legacy steps (if wizard unavailable):
+
+```bash
 nextbrowser multilogin signin
 nextbrowser multilogin automation-token
 nextbrowser multilogin folders
 nextbrowser multilogin profiles --folder-id <folder-uuid>
 nextbrowser multilogin print-env
 nextbrowser init --env
-nextbrowser multilogin doctor
 ```
 
 **macOS / Linux session env:**
 
 ```bash
+export MULTILOGIN_EMAIL="you@example.com"
 export MULTILOGIN_FOLDER_ID="<folder-uuid>"
 export MULTILOGIN_PROFILE_ID="<profile-uuid>"
 export MULTILOGIN_PROFILE_REDDIT_DEFAULT="<profile-uuid>"
 export NEXTBROWSER_BROWSER=multilogin
+export NEXTBROWSER_PROXY=none
 ```
 
 **Windows session env:**
 
 ```powershell
+$env:MULTILOGIN_EMAIL = "you@example.com"
 $env:MULTILOGIN_FOLDER_ID = "<folder-uuid>"
 $env:MULTILOGIN_PROFILE_ID = "<profile-uuid>"
 $env:MULTILOGIN_PROFILE_REDDIT_DEFAULT = "<profile-uuid>"
 $env:NEXTBROWSER_BROWSER = "multilogin"
+$env:NEXTBROWSER_PROXY = "none"
 ```
 
 ## Run automation

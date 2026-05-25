@@ -28,7 +28,7 @@ playwright install-deps chromium
 ### Windows (PowerShell)
 
 ```powershell
-cd C:\path\to\stan-browser
+cd C:\path\to\nextbrowser-cli
 python -m venv .venv
 .venv\Scripts\activate
 pip install -e .
@@ -70,11 +70,11 @@ This copies the skill to:
 ```bash
 # Shared (all agents)
 mkdir -p ~/.openclaw/skills
-cp -R /path/to/stan-browser/skills/nextbrowser-harness ~/.openclaw/skills/
+cp -R /path/to/nextbrowser-cli/skills/nextbrowser-harness ~/.openclaw/skills/
 
 # Or workspace-local
 mkdir -p ./skills
-cp -R /path/to/stan-browser/skills/nextbrowser-harness ./skills/
+cp -R /path/to/nextbrowser-cli/skills/nextbrowser-harness ./skills/
 ```
 
 Start a **new OpenClaw session** after installing (skills snapshot per session).
@@ -111,7 +111,7 @@ Optional: load skill from repo without copying:
 {
   skills: {
     load: {
-      extraDirs: ["/absolute/path/to/stan-browser/skills"],
+      extraDirs: ["/absolute/path/to/nextbrowser-cli/skills"],
     },
   },
 }
@@ -180,7 +180,7 @@ python3 -m nextbrowser_harness.cli scrape "https://example.com" --json
 If OpenClaw runs tools in a **sandbox container**, install Python, this package, Playwright, and Chromium **inside the image**. Example `setupCommand`:
 
 ```bash
-pip install -e /opt/stan-browser && playwright install chromium && playwright install-deps chromium
+pip install -e /opt/nextbrowser-cli && playwright install chromium && playwright install-deps chromium
 ```
 
 See [OpenClaw sandboxing](https://openclawx.cloud/en/gateway/sandboxing).

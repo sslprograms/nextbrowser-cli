@@ -19,8 +19,9 @@ SKILL_NAME = "nextbrowser-harness"
 DEFAULT_ENV = {
     "NEXTBROWSER_USE_CASE": "scrape",
     "NEXTBROWSER_BROWSER": "native",
+    "NEXTBROWSER_DRIVER": "undetected",
     "NEXTBROWSER_AUTOMATION": "playwright",
-    "NEXTBROWSER_PROXY": "nodemaven",
+    "NEXTBROWSER_PROXY": "none",
     "NODEMAVEN_PROXY_HOST": "",
     "NODEMAVEN_PROXY_USER": "",
     "NODEMAVEN_PROXY_PASSWORD": "",
@@ -133,6 +134,8 @@ def doctor_report() -> dict:
 
 
 def print_post_install(paths: list[tuple[str, Path]]) -> str:
+    from nextbrowser_harness.integrations.multilogin.platform_hints import mlx_setup_wizard_command
+
     lines = ["Installed nextbrowser-harness skill:"]
     for host_id, path in paths:
         lines.append(f"  [{host_id}] {path}")
@@ -143,6 +146,9 @@ def print_post_install(paths: list[tuple[str, Path]]) -> str:
         "",
         "Bootstrap:",
         f"  {platform_status()['cli']} init --env",
+        "",
+        "Multilogin X (optional):",
+        f"  {mlx_setup_wizard_command()}",
         "",
         "Use platform.cli from `nextbrowser status` as the shell prefix in any agent.",
     ])

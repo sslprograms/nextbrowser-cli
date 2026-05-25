@@ -13,7 +13,11 @@ INSTALL_GUIDES = {
 def browser_layer_for(config: HarnessConfig):
     """Pick browser layer from harness config."""
     if config.browser == "native":
-        return NativeBrowserLayer.from_config(config)
+        if config.driver == "playwright":
+            return NativeBrowserLayer.from_config(config)
+        from nextbrowser_harness.layers.browser.undetected import UndetectedBrowserLayer
+
+        return UndetectedBrowserLayer.from_config(config)
     if config.browser == "multilogin":
         from nextbrowser_harness.integrations.multilogin.browser import MultiloginBrowserLayer
 

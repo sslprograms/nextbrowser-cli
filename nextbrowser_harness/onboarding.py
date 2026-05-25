@@ -6,13 +6,27 @@ from pathlib import Path
 from nextbrowser_harness.config import (
     AutomationChoice,
     BrowserChoice,
+    DriverChoice,
     HarnessConfig,
     ProxyChoice,
     UseCase,
 )
 
 
-def onboard_interactive() -> HarnessConfig:
+def _prompt_proxy(browser: BrowserChoice) -> ProxyChoice:
+    if browser == "multilogin":
+        print("\nProxy: skipped — Multilogin profiles use their own proxies.")
+        return "none"
+    print("\nChoose proxy (optional):")
+    print("  1) None (default)")
+    print("  2) NodeMaven residential (recommended for native tier-3)")
+    print("  3) Bring your own proxies")
+    proxy_map = {"1": "none", "2": "nodemaven", "3": "custom", "": "none"}
+    proxy_raw = input("Selection [1]: ").strip()
+    return proxy_map.get(proxy_raw, "none")  # type: ignore[return-value]
+
+
+def onboard_interactive(*, run_mlx_wizard: bool = False) -> HarnessConfig:
     print("\n=== Nextbrowser Harness — onboarding ===\n")
     print("Target: under 5 minutes. Defaults are pre-selected; press Enter to accept.\n")
 
@@ -20,25 +34,23 @@ def onboard_interactive() -> HarnessConfig:
     use_case: UseCase = "accounts" if use_raw.startswith("m") or "account" in use_raw else "scrape"
 
     print("\nChoose browser:")
-    print("  1) Native bundled browser (default)")
-    print("  2) Multilogin")
+    print("  1) Native undetectable Chrome (default)")
+    print("  2) Multilogin X")
     print("  3) GoLogin")
     print("  4) Octo Browser")
     browser_map = {"1": "native", "2": "multilogin", "3": "gologin", "4": "octo", "": "native"}
     browser_raw = input("Selection [1]: ").strip()
     browser: BrowserChoice = browser_map.get(browser_raw, "native")  # type: ignore[assignment]
 
-    print("\nChoose proxy:")
-    print("  1) NodeMaven residential (default)")
-    print("  2) Bring your own proxies")
-    proxy_map = {"1": "nodemaven", "2": "custom", "": "nodemaven"}
-    proxy_raw = input("Selection [1]: ").strip()
-    proxy: ProxyChoice = proxy_map.get(proxy_raw, "nodemaven")  # type: ignore[assignment]
+    proxy: ProxyChoice = _prompt_proxy(browser)
+
+    driver: DriverChoice = "undetected" if browser == "native" else "playwright"
 
     cfg = HarnessConfig(
         use_case=use_case,
         browser=browser,
         proxy=proxy,
+        driver=driver,
         automation="playwright",
         headless=use_case == "scrape",
         llm_model=os.getenv("ANTHROPIC_MODEL") or os.getenv("OPENAI_MODEL") or None,
@@ -66,21 +78,35 @@ def onboard_interactive() -> HarnessConfig:
     Path(cfg.profiles_dir).mkdir(parents=True, exist_ok=True)
     cfg.save()
     _print_summary(cfg)
+
+    if browser == "multilogin" or run_mlx_wizard:
+        from nextbrowser_harness.integrations.multilogin.setup_wizard import run_setup_wizard
+
+        run_setup_wizard(cfg=cfg)
+
     return cfg
 
 
 def onboard_from_env() -> HarnessConfig:
     """Headless onboarding for agents — env vars override defaults."""
     use = os.getenv("NEXTBROWSER_USE_CASE", "scrape").lower()
+    browser = os.getenv("NEXTBROWSER_BROWSER", "native").strip().lower()
+    proxy_default = "none" if browser == "multilogin" else os.getenv("NEXTBROWSER_PROXY", "none")
+    driver_raw = os.getenv("NEXTBROWSER_DRIVER", "undetected").strip().lower()
+    driver: DriverChoice = "playwright" if driver_raw == "playwright" else "undetected"
+    if browser != "native":
+        driver = "playwright"
+
     cfg = HarnessConfig(
         use_case="accounts" if use.startswith("account") else "scrape",
-        browser=os.getenv("NEXTBROWSER_BROWSER", "native"),  # type: ignore[arg-type]
-        proxy=os.getenv("NEXTBROWSER_PROXY", "nodemaven"),  # type: ignore[arg-type]
+        browser=browser,  # type: ignore[arg-type]
+        proxy=proxy_default,  # type: ignore[arg-type]
+        driver=driver,
         automation=os.getenv("NEXTBROWSER_AUTOMATION", "playwright"),  # type: ignore[arg-type]
         headless=os.getenv("NEXTBROWSER_HEADLESS", "true").lower() in ("1", "true", "yes"),
         llm_model=os.getenv("NEXTBROWSER_LLM_MODEL") or os.getenv("ANTHROPIC_MODEL"),
     )
-    if os.getenv("NODEMAVEN_PROXY_HOST"):
+    if cfg.proxy == "nodemaven" and os.getenv("NODEMAVEN_PROXY_HOST"):
         cfg.nodemaven = {
             "host": os.getenv("NODEMAVEN_PROXY_HOST", ""),
             "user": os.getenv("NODEMAVEN_PROXY_USER", ""),
@@ -115,12 +141,14 @@ def _apply_multilogin_env(cfg: HarnessConfig) -> None:
         }
     if os.getenv("NEXTBROWSER_BROWSER", "").strip().lower() == "multilogin":
         cfg.browser = "multilogin"  # type: ignore[assignment]
+        cfg.proxy = "none"  # type: ignore[assignment]
 
 
 def _print_summary(cfg: HarnessConfig) -> None:
     print("\n--- Configuration saved ---")
     print(f"  Use case:    {cfg.use_case}")
     print(f"  Browser:     {cfg.browser}")
+    print(f"  Driver:      {cfg.driver}")
     print(f"  Proxy:       {cfg.proxy}")
     print(f"  Automation:  {cfg.automation}")
     print(f"  LLM model:   {cfg.llm_model or '(inherits from agent runtime)'}")

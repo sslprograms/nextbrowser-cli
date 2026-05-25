@@ -9,8 +9,9 @@ import yaml
 
 UseCase = Literal["scrape", "accounts"]
 BrowserChoice = Literal["native", "multilogin", "gologin", "octo"]
-ProxyChoice = Literal["nodemaven", "custom"]
+ProxyChoice = Literal["none", "nodemaven", "custom"]
 AutomationChoice = Literal["browser_use", "playwright", "custom"]
+DriverChoice = Literal["undetected", "playwright"]
 TierLevel = Literal[1, 2, 3]
 
 CONFIG_ENV = "NEXTBROWSER_CONFIG"
@@ -23,8 +24,9 @@ class HarnessConfig:
 
     use_case: UseCase = "scrape"
     browser: BrowserChoice = "native"
-    proxy: ProxyChoice = "nodemaven"
-    automation: AutomationChoice = "browser_use"
+    proxy: ProxyChoice = "none"
+    driver: DriverChoice = "undetected"
+    automation: AutomationChoice = "playwright"
     headless: bool = True
     captcha_enabled: bool = False
     captcha_provider: str | None = None

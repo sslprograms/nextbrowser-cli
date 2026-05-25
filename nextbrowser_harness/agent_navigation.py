@@ -33,7 +33,8 @@ def agent_command_recipes() -> dict:
         "mlx": "{cli} multilogin doctor && {cli} exec \"<url>\" --browser multilogin --profile reddit_default",
         "mlx_setup_windows": ".\\scripts\\setup-multilogin.ps1",
         "mlx_setup_unix": "./scripts/setup-multilogin.sh",
-        "mlx_setup": "{cli} multilogin setup",
+        "mlx_setup": "{cli} multilogin setup-wizard",
+        "mlx_setup_wizard": "{cli} multilogin setup-wizard",
         "mlx_forbidden": "Do not edit ~/.nextbrowser/multilogin_tokens.yaml by hand",
         "steps_format": {
             "url": "https://example.com",

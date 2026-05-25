@@ -16,8 +16,18 @@ def test_doctor_report_has_next_steps(monkeypatch):
         r = MagicMock()
         r.status_code = 200
         get.return_value = r
-        report = mlx_doctor_report(client)
+        with patch(
+            "nextbrowser_harness.integrations.multilogin.doctor.mlx_install_check",
+            return_value={"installed": True, "checked_paths": [], "download_url": "https://multilogin.com"},
+        ):
+            with patch(
+                "nextbrowser_harness.integrations.multilogin.doctor.ensure_display_linux",
+                return_value={"needed": False, "display_ok": True},
+            ):
+                report = mlx_doctor_report(client)
 
     assert "next_steps" in report
+    assert "setup_wizard_command" in report
+    assert report["mlx_app_installed"] is True
     assert report["api_token_ok"] is True
     assert report["ok"] is True

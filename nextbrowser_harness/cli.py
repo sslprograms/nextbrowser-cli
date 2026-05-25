@@ -35,6 +35,7 @@ def main(argv: list[str] | None = None) -> int:
     p_init = sub.add_parser("init", help="Run onboarding (interactive or --env)")
     p_init.add_argument("--env", action="store_true", help="Non-interactive onboarding from env vars")
     p_init.add_argument("--yes", action="store_true", help="Skip if config already exists")
+    p_init.add_argument("--mlx", action="store_true", help="After init, run Multilogin setup-wizard")
 
     sub.add_parser("status", help="Show current harness configuration")
 
@@ -108,6 +109,14 @@ def main(argv: list[str] | None = None) -> int:
     mlx_sub.add_parser("doctor", help="Check MLX launcher, token, folder/profile env")
     mlx_sub.add_parser("print-env", help="Print .env lines for MLX (no secrets)")
     p_mlx_setup = mlx_sub.add_parser("setup", help="How to configure MLX (platform-specific)")
+    p_mlx_wizard = mlx_sub.add_parser(
+        "setup-wizard",
+        help="Interactive MLX setup (email in .env, password never saved)",
+    )
+    p_mlx_wizard.add_argument("--env-file", default=".env", help="Path to .env file")
+    p_mlx_wizard.add_argument("--profile-key", default="default", help="MULTILOGIN_PROFILE_<KEY> name")
+    p_mlx_wizard.add_argument("--skip-signin", action="store_true", help="Use saved token only")
+    p_mlx_wizard.add_argument("--non-interactive", action="store_true", help="Auto-pick when only one choice")
     p_mlx_start = mlx_sub.add_parser("start", help="Start profile (launcher must be running)")
     p_mlx_start.add_argument("profile_id", help="Multilogin profile UUID")
     p_mlx_start.add_argument("--folder-id", default=None)
@@ -146,7 +155,12 @@ def main(argv: list[str] | None = None) -> int:
         if args.yes and resolve_config_path().exists():
             print(f"Config exists: {resolve_config_path()}")
             return 0
-        cfg = onboard_from_env() if args.env else onboard_interactive()
+        if args.env:
+            cfg = onboard_from_env()
+        elif getattr(args, "mlx", False):
+            cfg = onboard_interactive(run_mlx_wizard=True)
+        else:
+            cfg = onboard_interactive()
         print(f"Ready. Config: {cfg.save()}")
         return 0
 
@@ -292,6 +306,7 @@ def main(argv: list[str] | None = None) -> int:
             from nextbrowser_harness.integrations.multilogin.platform_hints import (
                 mlx_setup_script_hint,
                 mlx_setup_script_path,
+                mlx_setup_wizard_command,
                 mlx_start_desktop_hint,
             )
             import platform
@@ -299,21 +314,36 @@ def main(argv: list[str] | None = None) -> int:
             sysname = platform.system().lower()
             script = mlx_setup_script_path()
             print(f"Platform: {sysname}")
-            print(f"Guided setup: {mlx_setup_script_hint()}")
+            print(f"Recommended: {mlx_setup_wizard_command()}")
+            print(f"Guided script: {mlx_setup_script_hint()}")
             if not script.is_file():
                 print(f"  (script missing at {script})")
             print(f"\n{mlx_start_desktop_hint()}")
-            if sysname != "windows":
-                print("\nManual CLI flow:")
-                print("  nextbrowser multilogin signin")
-                print("  nextbrowser multilogin automation-token")
-                print("  nextbrowser multilogin folders")
-                print("  nextbrowser multilogin profiles --folder-id <folder-uuid>")
-                print("  nextbrowser multilogin print-env   # add to .env")
-                print("  nextbrowser init --env")
-                print("  nextbrowser multilogin doctor")
+            print("\nManual CLI flow:")
+            print("  nextbrowser multilogin setup-wizard")
+            print("  nextbrowser multilogin doctor")
             print("\nAgents: do NOT edit ~/.nextbrowser/multilogin_tokens.yaml manually.")
             return 0
+        if args.mlx_cmd == "setup-wizard":
+            from pathlib import Path
+
+            from nextbrowser_harness.integrations.multilogin.setup_wizard import (
+                SetupWizardOptions,
+                run_setup_wizard,
+            )
+
+            opts = SetupWizardOptions(
+                env_file=Path(args.env_file),
+                profile_key=args.profile_key,
+                skip_signin=args.skip_signin,
+                non_interactive=args.non_interactive,
+            )
+            try:
+                result = run_setup_wizard(options=opts)
+            except Exception as e:
+                print(str(e))
+                return 1
+            return 0 if result.get("doctor_ok") else 1
         if args.mlx_cmd == "folders":
             folders = client.list_folders()
             print(json.dumps(folders, indent=2))

@@ -124,7 +124,7 @@ Add to shell profile:
 
 ```bash
 export NEXTBROWSER_AUTOMATION=playwright
-export PATH="/path/to/stan-browser/.venv/bin:$PATH"
+export PATH="/path/to/nextbrowser-cli/.venv/bin:$PATH"
 ```
 
 Or use full CLI from `nextbrowser status` → `platform.cli`.

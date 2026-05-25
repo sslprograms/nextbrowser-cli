@@ -66,8 +66,9 @@ nextbrowser agent doctor
 |----------|--------|
 | `NEXTBROWSER_USE_CASE` | `scrape`, `accounts` |
 | `NEXTBROWSER_BROWSER` | `native`, `multilogin` |
+| `NEXTBROWSER_DRIVER` | `undetected` (default), `playwright` |
 | `NEXTBROWSER_AUTOMATION` | `playwright` (recommended) |
-| `NEXTBROWSER_PROXY` | `nodemaven`, `custom`, `none` |
+| `NEXTBROWSER_PROXY` | `none` (default), `nodemaven`, `custom` |
 | `MULTILOGIN_FOLDER_ID` | MLX folder UUID |
 | `MULTILOGIN_PROFILE_ID` | Default profile UUID |
 | `MULTILOGIN_PROFILE_<KEY>` | Per-profile UUID (uppercase key) |

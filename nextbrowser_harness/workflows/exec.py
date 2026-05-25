@@ -124,6 +124,8 @@ def exec_site(
             try:
                 if hasattr(ctx, "_harness_mlx"):
                     ctx._harness_mlx.close()
+                elif hasattr(ctx, "_harness_uc"):
+                    ctx._harness_uc.close()
                 else:
                     ctx.close()
                     if hasattr(ctx, "_harness_playwright"):

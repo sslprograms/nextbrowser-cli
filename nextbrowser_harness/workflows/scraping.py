@@ -38,7 +38,7 @@ class ScrapingWorkflow:
                 return NodeMavenProxyLayer.from_config(self.config)
             except ValueError:
                 return None
-        if self.config.custom_proxies:
+        if self.config.proxy == "custom" and self.config.custom_proxies:
             return CustomProxyLayer.from_config(self.config)
         return None
 
@@ -125,6 +125,8 @@ class ScrapingWorkflow:
             try:
                 if hasattr(ctx, "_harness_mlx"):
                     ctx._harness_mlx.close()
+                elif hasattr(ctx, "_harness_uc"):
+                    ctx._harness_uc.close()
                 else:
                     ctx.close()
                     if hasattr(ctx, "_harness_playwright"):

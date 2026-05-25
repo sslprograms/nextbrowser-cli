@@ -23,6 +23,8 @@ pip install -e .
 pip install -e ".[playwright]"
 playwright install chromium
 
+python scripts/sync_skill_pack.py
+
 if [[ "$(uname -s)" == "Linux" ]]; then
   echo "==> Installing Playwright system deps (Linux)..."
   playwright install-deps chromium || echo "Warning: install-deps failed — try: sudo playwright install-deps chromium"

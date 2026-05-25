@@ -70,13 +70,13 @@ Use `platform.cli` and copy recipes from `agent_navigation` in the JSON output.
 ### 2. Bootstrap once (if not done)
 
 ```bash
-pip install -e ".[playwright]"
+pip install -e ".[playwright,undetected]"
 playwright install chromium
 nextbrowser init --env
 nextbrowser agent install --host all --force
 ```
 
-`init --env` sets `NEXTBROWSER_AUTOMATION=playwright` automatically — no API key or secret prompt needed.
+`init --env` sets `NEXTBROWSER_AUTOMATION=playwright` and `NEXTBROWSER_DRIVER=undetected` — no API key or secret prompt needed.
 
 ### 3. Navigate (browser + actions)
 
@@ -114,30 +114,26 @@ nextbrowser tier lookup "https://reddit.com"
 
 ### 5. Multilogin X (optional)
 
-**Agents:** follow [references/multilogin.md](references/multilogin.md) — do **not** patch `multilogin_tokens.yaml`.
+**Agents:** follow [references/multilogin.md](references/multilogin.md) — run `setup-wizard`; do **not** patch `multilogin_tokens.yaml` or store passwords.
 
-**Windows (recommended):**
+**Recommended (all platforms):**
 
-```powershell
-.\scripts\setup-multilogin.ps1
+```bash
+nextbrowser multilogin setup-wizard
 nextbrowser multilogin doctor
 ```
 
-**Linux / macOS (recommended):**
+**Windows script:**
+
+```powershell
+.\scripts\setup-multilogin.ps1
+```
+
+**Linux / macOS script:**
 
 ```bash
 chmod +x scripts/setup-multilogin.sh
 ./scripts/setup-multilogin.sh
-nextbrowser multilogin doctor
-```
-
-```bash
-nextbrowser multilogin setup
-nextbrowser multilogin signin
-nextbrowser multilogin automation-token
-nextbrowser multilogin print-env    # add lines to .env
-nextbrowser init --env
-nextbrowser multilogin doctor
 ```
 
 **Run with MLX profile** (needs `MULTILOGIN_PROFILE_REDDIT_DEFAULT` when using `--profile reddit_default`):
@@ -176,7 +172,7 @@ Use `--action` flags or a JSON `actions` array in a steps file.
 - **Do not invent Playwright Python** — use `exec` / `browse` / `--js` / `--steps-file`
 - **Account run fails** — set `NEXTBROWSER_AUTOMATION=playwright`
 - **MLX signin 400** — harness MD5-hashes password; use MLX app credentials; run `multilogin signin`, never edit token YAML
-- **MLX doctor fails** — start desktop app; run `nextbrowser multilogin setup`; Windows: `.\scripts\setup-multilogin.ps1`
+- **MLX doctor fails** — start desktop app; run `nextbrowser multilogin setup-wizard`
 - **exec --profile reddit_default fails** — set `MULTILOGIN_PROFILE_REDDIT_DEFAULT` to the profile UUID
 - **PROFILE_ALREADY_RUNNING** — harness reuses CDP port; or `nextbrowser multilogin stop-all`
 - **Reddit success:false** — captcha heuristics may fire while partial actions still ran

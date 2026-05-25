@@ -1,28 +1,47 @@
+# Python
 .venv/
+venv/
 __pycache__/
-*.pyc
+*.py[cod]
+*$py.class
 .pytest_cache/
-.nextbrowser.yaml
-.env
-.env.local
+.mypy_cache/
+.ruff_cache/
 *.egg-info/
 dist/
 build/
-_spec_extract.txt
+*.egg
 
-# Secrets and local runtime data (never commit)
+# Local config and secrets (never commit)
+.nextbrowser.yaml
+.env
+.env.local
+.env.*.local
+
+# Secrets and MLX tokens
 multilogin_tokens.yaml
 **/multilogin_tokens.yaml
 *.tokens.yaml
 secrets.yaml
 credentials.json
 
-# Local profiles, accounts, test logs
+# Runtime data
 .nextbrowser/
 profiles/
 accounts.json
 **/accounts.json
+
+# Logs and local test output
 *.log
 nb-product-test/
 nb-test-*.png
+pixelscan-*.png
+_spec_extract.txt
+
+# IDE / tooling
+.idea/
+.vscode/
+*.swp
+.cursor/
 agent-tools/
+assets/
