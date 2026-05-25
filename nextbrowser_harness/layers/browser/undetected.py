@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from nextbrowser_harness.config import HarnessConfig
+from nextbrowser_harness.integrations.multilogin.platform_hints import ensure_display_linux
+from nextbrowser_harness.platform_paths import is_linux
 from nextbrowser_harness.layers.browser.base import BrowserSession
 
 
@@ -89,6 +91,12 @@ class UndetectedBrowserLayer:
                 options.add_argument(f"--proxy-server={server}")
                 if ep.get("username"):
                     proxy_dict = {"username": ep["username"], "password": ep.get("password") or ""}
+
+        if is_linux() and headless and not ensure_display_linux().get("display_ok"):
+            raise RuntimeError(
+                "Headless Linux needs Xvfb for undetected Chrome: sudo apt install xvfb "
+                "(or set DISPLAY / run under xvfb-run)"
+            )
 
         driver = uc.Chrome(options=options, headless=headless, use_subprocess=True)
         cdp_url = f"http://127.0.0.1:{port}"

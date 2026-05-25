@@ -14,9 +14,11 @@ from typing import Any
 from nextbrowser_harness.config import HarnessConfig
 from nextbrowser_harness.integrations.multilogin.client import MultiloginXClient, MultiloginXError
 from nextbrowser_harness.integrations.multilogin.platform_hints import (
+    fix_linux_mlx_launcher_script,
     mlx_install_check,
     try_start_mlx_desktop,
 )
+from nextbrowser_harness.platform_paths import is_linux
 from nextbrowser_harness.onboarding import onboard_from_env
 
 
@@ -136,6 +138,11 @@ def run_setup_wizard(
     client = client or MultiloginXClient()
 
     print("\n=== Multilogin X setup wizard ===\n")
+
+    if is_linux():
+        fix = fix_linux_mlx_launcher_script(apply=True)
+        if fix.get("applied"):
+            print(f"Linux: {fix.get('message')}")
 
     install = mlx_install_check()
     if not install.get("installed"):

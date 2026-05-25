@@ -11,12 +11,14 @@ __pycache__/
 dist/
 build/
 *.egg
+nextbrowser_harness.egg-info/
 
 # Local config and secrets (never commit)
 .nextbrowser.yaml
 .env
 .env.local
 .env.*.local
+!.env.example
 
 # Secrets and MLX tokens
 multilogin_tokens.yaml
@@ -24,12 +26,21 @@ multilogin_tokens.yaml
 *.tokens.yaml
 secrets.yaml
 credentials.json
+*credentials*
+*.pem
+*.key
 
-# Runtime data
+# Runtime / user data
 .nextbrowser/
 profiles/
 accounts.json
 **/accounts.json
+tier_cache.yaml
+
+# Local installers and MLX packages
+*.deb
+mlxdeb.deb
+/tmp/
 
 # Logs and local test output
 *.log
@@ -37,6 +48,9 @@ nb-product-test/
 nb-test-*.png
 pixelscan-*.png
 _spec_extract.txt
+screenshots/
+*.png
+!docs/**/*.png
 
 # IDE / tooling
 .idea/
@@ -44,4 +58,10 @@ _spec_extract.txt
 *.swp
 .cursor/
 agent-tools/
+agent-transcripts/
 assets/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini

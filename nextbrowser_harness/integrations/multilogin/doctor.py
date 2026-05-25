@@ -59,6 +59,7 @@ def mlx_doctor_report(client: MultiloginXClient | None = None) -> dict[str, Any]
         "launcher_error": None,
         "mlx_app_installed": install.get("installed"),
         "mlx_checked_paths": install.get("checked_paths", []),
+        "linux_launcher": install.get("linux_launcher"),
         "display_ok": display.get("display_ok"),
         "xvfb_available": xvfb_available() if display.get("needed") else None,
         "display_hint": display.get("install_hint") or None,
@@ -96,6 +97,11 @@ def mlx_doctor_report(client: MultiloginXClient | None = None) -> dict[str, Any]
         report["api_error"] = str(e)
 
     steps: list[str] = []
+    linux_launcher = install.get("linux_launcher") or {}
+    if linux_launcher.get("wrong_path_in_script"):
+        steps.append(
+            "Linux: broken mlx launcher path — run: nextbrowser multilogin fix-linux-launcher"
+        )
     if not report["mlx_app_installed"]:
         steps.append(
             f"Install Multilogin X desktop app from {install.get('download_url', 'https://multilogin.com')}, "

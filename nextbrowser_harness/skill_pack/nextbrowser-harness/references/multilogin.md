@@ -27,7 +27,20 @@ Or: `nextbrowser multilogin setup` (prints platform-specific hints).
 |----|-----|
 | Windows | `%LOCALAPPDATA%\Multilogin X App\MLXDesktopApp.exe` |
 | macOS | `open -a "Multilogin X App"` or install from multilogin.com |
-| Linux | App menu, or `MULTILOGIN_APP_EXE` (e.g. `/opt/mlx/desktop.bin`); headless: `sudo apt install xvfb` |
+| Linux | `/opt/mlx/usr/bin/mlx` or `/opt/mlx/opt/mlx/agent.bin`; set `MULTILOGIN_APP_EXE` if custom |
+
+### Linux .deb install fix
+
+Some `.deb` installs ship a broken launcher script that calls `/opt/mlx/agent.bin` instead of `/opt/mlx/opt/mlx/agent.bin`.
+
+```bash
+nextbrowser multilogin fix-linux-launcher
+nextbrowser multilogin doctor
+```
+
+`exec --browser multilogin` auto-starts MLX and applies this fix when `MULTILOGIN_AUTO_FIX_LAUNCHER=true` (default).
+
+Headless Linux: `sudo apt install xvfb`
 
 ## Manual CLI flow
 

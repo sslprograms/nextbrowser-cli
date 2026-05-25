@@ -36,6 +36,13 @@ def agent_command_recipes() -> dict:
         "mlx_setup": "{cli} multilogin setup-wizard",
         "mlx_setup_wizard": "{cli} multilogin setup-wizard",
         "mlx_forbidden": "Do not edit ~/.nextbrowser/multilogin_tokens.yaml by hand",
+        "mlx_linux_fix": "{cli} multilogin fix-linux-launcher",
+        "follow_user_steps": (
+            '{cli} exec "<url>" --steps-file <path-to-steps.json> '
+            "(omit --tier for auto; add --browser multilogin when recommended)"
+        ),
+        "tier_lookup": '{cli} tier lookup "<url>"',
+        "mlx_recommend": "If multilogin_recommendation in status/tier lookup, run setup-wizard before hard sites",
         "steps_format": {
             "url": "https://example.com",
             "actions": ["goto", "wait:2000", "title", "eval:document.title", "final_url"],

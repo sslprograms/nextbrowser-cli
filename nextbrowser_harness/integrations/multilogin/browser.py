@@ -5,6 +5,7 @@ from dataclasses import dataclass
 
 from nextbrowser_harness.config import HarnessConfig
 from nextbrowser_harness.integrations.multilogin.client import MultiloginXClient, MultiloginXError
+from nextbrowser_harness.integrations.multilogin.platform_hints import ensure_mlx_launcher_running
 from nextbrowser_harness.layers.browser.base import BrowserSession
 
 
@@ -69,6 +70,14 @@ class MultiloginBrowserLayer:
     def launch_context(self, session: BrowserSession, *, proxy=None, headless: bool = False):
         if not isinstance(session, MultiloginBrowserSession):
             session = self.ensure_profile(session.profile_id)
+
+        launcher = ensure_mlx_launcher_running()
+        if not launcher.get("launcher_reachable_after"):
+            raise MultiloginXError(
+                "Multilogin X launcher is not reachable after start attempt. "
+                "Run: nextbrowser multilogin doctor — "
+                f"linux_fix={launcher.get('linux_fix')}"
+            )
 
         started = self.client.start_profile(
             session.mlx_folder_id,

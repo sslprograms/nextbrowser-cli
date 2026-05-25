@@ -10,6 +10,7 @@ from nextbrowser_harness.tiers.resolver import TierResolver
 from nextbrowser_harness.workflows.accounts import AccountAutomationWorkflow
 from nextbrowser_harness.workflows.browse import browse_site
 from nextbrowser_harness.workflows.exec import exec_site
+from nextbrowser_harness.integrations.multilogin.recommend import multilogin_recommendation
 from nextbrowser_harness.workflows.scraping import ScrapingWorkflow
 
 
@@ -37,6 +38,9 @@ class Harness:
         for key, val in list(recipes.items()):
             if isinstance(val, str) and "{cli}" in val:
                 recipes[key] = val.replace("{cli}", cli)
+        tier_hint = None
+        if self.config.browser != "multilogin":
+            tier_hint = multilogin_recommendation(self.config, url="https://www.reddit.com")
         return {
             "version": "0.1.2",
             "config": str(resolve_config_path()),
@@ -44,7 +48,13 @@ class Harness:
             "browser": self.config.browser,
             "proxy": self.config.proxy,
             "automation": self.config.automation,
+            "driver": getattr(self.config, "driver", "undetected"),
             "llm": self.config.llm_model or "(inherits from agent)",
+            "tier_selection": (
+                "scrape: auto tier from DB + escalate 1→2→3 until success; "
+                "exec/browse: auto tier per URL (omit --tier) — browser tiers use max(2, recommended)"
+            ),
+            "multilogin_recommendation": tier_hint,
             "platform": platform_status(),
             "agent_navigation": recipes,
         }

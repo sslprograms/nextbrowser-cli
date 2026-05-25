@@ -46,7 +46,13 @@ def main(argv: list[str] | None = None) -> int:
 
     p_browse = sub.add_parser("browse", help="Open URL in browser and run actions (tier 2/3)")
     p_browse.add_argument("url", nargs="?", default="https://www.reddit.com", help="Target URL")
-    p_browse.add_argument("--tier", type=int, choices=[1, 2, 3], default=3)
+    p_browse.add_argument(
+        "--tier",
+        type=int,
+        choices=[1, 2, 3],
+        default=None,
+        help="Force tier; omit to use tier DB recommendation for URL (exec uses tier 2+)",
+    )
     p_browse.add_argument("--browser", choices=["native", "multilogin"], default=None,
                           help="Override config browser for this run")
     p_browse.add_argument("--profile", default="reddit_default", help="Profile / MLX account key")
@@ -63,7 +69,13 @@ def main(argv: list[str] | None = None) -> int:
 
     p_exec = sub.add_parser("exec", help="Browser automation with JS inject and step files (for agents)")
     p_exec.add_argument("url", help="Start URL")
-    p_exec.add_argument("--tier", type=int, choices=[1, 2, 3], default=3)
+    p_exec.add_argument(
+        "--tier",
+        type=int,
+        choices=[1, 2, 3],
+        default=None,
+        help="Force tier; omit to use tier DB recommendation for URL (min tier 2 for browser)",
+    )
     p_exec.add_argument("--browser", choices=["native", "multilogin"], default=None)
     p_exec.add_argument("--profile", default="default", help="Profile / MLX account key")
     p_exec.add_argument("--screenshot", default=None)
@@ -107,6 +119,11 @@ def main(argv: list[str] | None = None) -> int:
     p_mlx_profiles.add_argument("--search", default="", help="search_text (empty = all)")
     mlx_sub.add_parser("stop-all", help="Stop all running MLX profiles (launcher)")
     mlx_sub.add_parser("doctor", help="Check MLX launcher, token, folder/profile env")
+    p_mlx_fix = mlx_sub.add_parser(
+        "fix-linux-launcher",
+        help="Fix /opt/mlx/usr/bin/mlx when it points at wrong agent.bin (Linux .deb)",
+    )
+    p_mlx_fix.add_argument("--dry-run", action="store_true", help="Show fix without writing")
     mlx_sub.add_parser("print-env", help="Print .env lines for MLX (no secrets)")
     p_mlx_setup = mlx_sub.add_parser("setup", help="How to configure MLX (platform-specific)")
     p_mlx_wizard = mlx_sub.add_parser(
@@ -218,12 +235,18 @@ def main(argv: list[str] | None = None) -> int:
         return 0 if out["success"] else 1
 
     if args.command == "tier":
+        from nextbrowser_harness.integrations.multilogin.recommend import multilogin_recommendation
+
         if args.tier_cmd == "set":
             harness.set_tier_override(args.domain, args.level)
             print(f"Override: {args.domain} -> tier {args.level}")
             return 0
         rec = harness.tiers.recommended_tier(args.url)
-        print(json.dumps({"domain": rec.domain, "tier": rec.tier, "source": rec.source}, indent=2))
+        mlx = multilogin_recommendation(harness.config, args.url, tier=int(rec.tier))
+        payload = {"domain": rec.domain, "tier": rec.tier, "source": rec.source}
+        if mlx:
+            payload["multilogin_recommendation"] = mlx
+        print(json.dumps(payload, indent=2))
         return 0
 
     if args.command in ("agent", "openclaw"):
@@ -287,6 +310,14 @@ def main(argv: list[str] | None = None) -> int:
             token = client.fetch_automation_token()
             print(f"Automation token saved ({len(token)} chars)")
             return 0
+        if args.mlx_cmd == "fix-linux-launcher":
+            from nextbrowser_harness.integrations.multilogin.platform_hints import (
+                fix_linux_mlx_launcher_script,
+            )
+
+            result = fix_linux_mlx_launcher_script(apply=not args.dry_run)
+            print(json.dumps(result, indent=2))
+            return 0 if result.get("applied") or not result.get("wrong_path_in_script") else 1
         if args.mlx_cmd == "doctor":
             from nextbrowser_harness.integrations.multilogin.doctor import mlx_doctor_report
 

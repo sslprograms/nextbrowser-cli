@@ -84,6 +84,13 @@ pip install -e ".[dev]"
 python -m pytest tests/ -q
 ```
 
+## Before you push to GitHub
+
+- Do **not** commit `.env`, tokens, or screenshots (see [SECURITY.md](SECURITY.md))
+- Run `python scripts/sync_skill_pack.py` after editing `skills/`
+- Run `python -m pytest tests/ -q`
+- Confirm `git status` shows no `.env`, `*.egg-info`, or `.nextbrowser/`
+
 ## License
 
 MIT — see [LICENSE](LICENSE).

@@ -57,6 +57,43 @@ Drive browser automation through the **nextbrowser CLI** on the same machine as 
 - User needs **read-only HTML** without launching a browser UI → use `scrape`
 - User wants **persistent accounts/profiles** → use `account`
 
+## Agent rule: follow the user's browser instructions
+
+When the user describes a multi-step browser task (login, search, click, comment, scrape):
+
+1. **Do not** write standalone Playwright/Python — use `nextbrowser exec` only.
+2. **Translate** each user step into `--action` flags or a JSON steps file, then run one command.
+3. **MLX / Multilogin:** before first `exec --browser multilogin`, run `multilogin doctor`; if launcher fails on Linux, run `multilogin fix-linux-launcher`.
+4. **Native anti-detect:** default driver is undetected Chrome (`NEXTBROWSER_DRIVER=undetected`); use `--browser native --tier 3`.
+5. **Report** the JSON result (`success`, `actions`, `error`) back to the user.
+
+Example — user says: open site, wait, click login, fill email/password, submit:
+
+```bash
+nextbrowser exec "https://example.com" --tier 3 --browser multilogin --profile default \
+  --action "goto" \
+  --action "wait:2000" \
+  --action "click:button.login" \
+  --action "fill:#email|user@example.com" \
+  --action "fill:#password|SECRET_FROM_USER_ENV" \
+  --action "click:button[type=submit]" \
+  --action "wait_load" \
+  --action "final_url"
+```
+
+Prefer a steps file for long flows:
+
+```json
+{
+  "url": "https://example.com",
+  "actions": ["goto", "wait:2000", "click:...", "fill:...|...", "final_url"]
+}
+```
+
+```bash
+nextbrowser exec "https://example.com" --steps-file ./my-steps.json --browser multilogin --tier 3
+```
+
 ## Procedure
 
 ### 1. Resolve the CLI prefix
@@ -105,14 +142,30 @@ nextbrowser exec "https://shop.com" --action "fill:#email|user@test.com" --actio
 nextbrowser browse "https://www.reddit.com" --js "document.title"
 ```
 
-### 4. Read-only scrape (no browser UI)
+### 4. Tier selection (automatic unless you force it)
+
+| Command | Without `--tier` |
+|---------|------------------|
+| `scrape` | Looks up domain in tier DB → starts there → **escalates 1→2→3** until success |
+| `exec` / `browse` | Uses **recommended tier for URL** from DB (e.g. Reddit = tier 3); browser work uses at least tier 2 |
+| `tier lookup` | Shows recommended tier + whether to use Multilogin |
+
+```bash
+nextbrowser tier lookup "https://www.reddit.com"
+nextbrowser scrape "https://example.com/pricing"
+nextbrowser exec "https://www.reddit.com"   # no --tier = auto from DB
+```
+
+**Multilogin recommendation:** If `browser` is `native` but the site needs tier 2/3 (or `use_case=accounts`), JSON includes `multilogin_recommendation` — tell the user to run `nextbrowser multilogin setup-wizard` and use `--browser multilogin`.
+
+### 5. Read-only scrape (no browser UI)
 
 ```bash
 nextbrowser scrape "https://example.com/pricing"
 nextbrowser tier lookup "https://reddit.com"
 ```
 
-### 5. Multilogin X (optional)
+### 6. Multilogin X (optional)
 
 **Agents:** follow [references/multilogin.md](references/multilogin.md) — run `setup-wizard`; do **not** patch `multilogin_tokens.yaml` or store passwords.
 
@@ -136,13 +189,22 @@ chmod +x scripts/setup-multilogin.sh
 ./scripts/setup-multilogin.sh
 ```
 
+**Linux .deb broken launcher** (`/opt/mlx/usr/bin/mlx` points at wrong `agent.bin`):
+
+```bash
+nextbrowser multilogin fix-linux-launcher
+nextbrowser multilogin doctor
+```
+
+Correct binary path: `/opt/mlx/opt/mlx/agent.bin`. Harness auto-fixes this on `setup-wizard` and before MLX `exec`.
+
 **Run with MLX profile** (needs `MULTILOGIN_PROFILE_REDDIT_DEFAULT` when using `--profile reddit_default`):
 
 ```bash
 nextbrowser exec "https://www.reddit.com" --browser multilogin --profile reddit_default --tier 3
 ```
 
-### 6. Host install
+### 7. Host install
 
 ```bash
 nextbrowser agent install --host hermes --force

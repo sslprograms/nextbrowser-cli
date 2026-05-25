@@ -11,6 +11,7 @@ from nextbrowser_harness.browser_actions import ActionSpec, load_steps_file, run
 from nextbrowser_harness.config import HarnessConfig
 from nextbrowser_harness.layers.browser.antidetect import browser_layer_for
 from nextbrowser_harness.tiers.resolver import TierResolver
+from nextbrowser_harness.integrations.multilogin.recommend import multilogin_recommendation
 from nextbrowser_harness.workflows.browser_result import BrowseResult
 
 
@@ -33,9 +34,10 @@ def exec_site(
     """
     resolver = TierResolver(Path(config.tier_cache_path))
     rec = resolver.recommended_tier(url)
-    use_tier = tier or rec.tier
+    use_tier = tier if tier is not None else rec.tier
     if use_tier not in (2, 3):
         use_tier = 3
+    mlx_hint = multilogin_recommendation(config, url, tier=use_tier, cache_path=config.tier_cache_path)
 
     specs: list[ActionSpec] = []
     if steps_file:
@@ -62,7 +64,10 @@ def exec_site(
 
     headful = use_tier >= 3
     if headless is None:
-        headless = not headful and config.browser == "native"
+        if config.browser == "multilogin":
+            headless = False
+        else:
+            headless = not headful
 
     layer = browser_layer_for(config)
     session = layer.ensure_profile(profile_id)
@@ -109,6 +114,8 @@ def exec_site(
             actions=[asdict(r) for r in results],
             error="possible block/captcha detected" if blocked else None,
             screenshot_path=screenshot,
+            tier_source=rec.source if tier is None else "forced",
+            multilogin_recommendation=mlx_hint,
         )
     except Exception as e:
         return BrowseResult(
@@ -118,6 +125,8 @@ def exec_site(
             success=False,
             actions=[asdict(r) for r in results] if results else [],
             error=str(e),
+            tier_source=rec.source if tier is None else "forced",
+            multilogin_recommendation=mlx_hint,
         )
     finally:
         if not keep_open and ctx is not None:
