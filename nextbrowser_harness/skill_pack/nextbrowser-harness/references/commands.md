@@ -1,83 +1,68 @@
-# nextbrowser CLI reference (agents)
+# nextbrowser CLI reference
 
-Always prefix commands with `platform.cli` from `nextbrowser status` when `nextbrowser` is not on PATH.
+Use `platform.cli` from `nextbrowser status` if `nextbrowser` is not on PATH.
 
 ## Core
 
 | Command | Purpose |
 |---------|---------|
-| `nextbrowser status` | `platform.cli`, `accounts`, `tier3_automation`, `how_to_automate` |
-| `nextbrowser account list` | Named Multilogin accounts for tier 3 |
-| `nextbrowser account add <id> --create-mlx` | Create MLX profile + register name |
-| `nextbrowser init --env` | Bootstrap from environment variables |
+| `nextbrowser status` | `agent_must_know`, `stack`, `accounts`, `commands` |
+| `nextbrowser init --env` | Bootstrap from environment |
 | `nextbrowser scrape "<url>"` | Tiered HTTP fetch (no browser UI) |
-| `nextbrowser exec "<url>"` | Browser + JS / actions / steps file |
-| `nextbrowser browse "<url>"` | Same as exec with Reddit-oriented defaults |
-| `nextbrowser tier lookup "<url>"` | Recommended tier for domain |
+| `nextbrowser tier lookup "<url>"` | Recommended tier + MLX hint |
 
-## exec / browse flags
+## Account automation (use case 1)
 
-| Flag | Example |
-|------|---------|
-| `--js` | `--js "document.title"` |
-| `--js-file` | `--js-file examples/scripts/count-posts.js` |
-| `--steps-file` | `--steps-file examples/steps-reddit.json` |
-| `--action` | Repeatable: `--action "click:button.submit"` |
-| `--tier` | `1`, `2`, or `3` |
-| `--browser` | `native` or `multilogin` |
-| `--account` / `--profile` | Named account (required for tier 3), e.g. `reddit_main` |
-| `--screenshot` | Output PNG path |
-| `--headless` | Headless native browser |
-| `--keep-open` | Leave MLX browser running (exec only) |
+| Command | Purpose |
+|---------|---------|
+| `nextbrowser account list` | Saved accounts (name, MLX UUID, logged_in) |
+| `nextbrowser account add <name> --create-mlx` | New MLX profile + name binding |
+| `nextbrowser account add <name> --mlx-profile <uuid>` | Link existing MLX profile |
+| `nextbrowser login <name> --url <url>` | One-shot login (open + state + optional credentials) |
+| `nextbrowser login <name> --url <url> --username U --password P --username-index 12 --password-index 15 --submit-index 20` | Chained login |
+| `nextbrowser ui state` | List clickable elements |
+| `nextbrowser ui open <url>` | Navigate |
+| `nextbrowser ui click <N>` | Click by index |
+| `nextbrowser ui type <N> "text"` | Type into element |
+| `nextbrowser ui keys "Enter"` | Send keys |
+| `nextbrowser ui eval "<js>"` | Run JavaScript |
+| `nextbrowser ui screenshot [path]` | Screenshot |
+| `nextbrowser ui chain "open URL" "state" "click 5"` | Multi-step in one shell |
+| `nextbrowser ui run <browser-use args...>` | Raw browser-use passthrough |
+| `nextbrowser ui close` | End task: disconnect + stop MLX |
 
-## Steps file format
+## Multilogin
 
-```json
-{
-  "url": "https://www.reddit.com",
-  "actions": [
-    "goto",
-    "wait_load",
-    "title",
-    "eval:document.querySelectorAll('article').length",
-    "final_url"
-  ]
-}
-```
+| Command | Purpose |
+|---------|---------|
+| `nextbrowser multilogin setup-wizard` | Interactive MLX setup |
+| `nextbrowser multilogin doctor` | Launcher + token check |
+| `nextbrowser multilogin folders` | List workspace folders |
+| `nextbrowser multilogin profiles` | Search profiles |
+| `nextbrowser multilogin stop-all` | Emergency stop (use only outside a task) |
 
-URL in JSON overrides the CLI URL argument when present.
+## browser-use bridge
 
-## Accounts (tier 3)
-
-```bash
-nextbrowser account list
-nextbrowser account list --json
-nextbrowser account add reddit_main --create-mlx --display-name "Reddit" --site reddit.com
-nextbrowser account add reddit_main --mlx-profile <uuid>   # link existing MLX profile
-nextbrowser exec "https://www.reddit.com" --account reddit_main --action goto --action state
-nextbrowser account run reddit_main "eval:document.title" --url "https://www.reddit.com"
-```
-
-`--account` is required on tier-3 `exec`/`browse`. Harness uses Multilogin + CDP automatically.
+| Command | Purpose |
+|---------|---------|
+| `nextbrowser browser-use connect --account <name>` | Underlying connect (login wraps this) |
+| `nextbrowser browser-use disconnect --account <name>` | Same as `ui close` |
+| `nextbrowser browser-use doctor` | browser-use CLI + saved session |
+| `nextbrowser browser-use install-skill` | Download official browser-use SKILL.md |
 
 ## Agent skill install
 
 ```bash
-nextbrowser agent install --force
+nextbrowser agent install --force --with-browser-use
 nextbrowser agent doctor
 ```
 
-See [automation.md](automation.md) for the element workflow (not host-specific).
+## Environment
 
-## Environment variables
-
-| Variable | Values |
-|----------|--------|
-| `NEXTBROWSER_USE_CASE` | `scrape`, `accounts` |
-| `NEXTBROWSER_BROWSER` | `native`, `multilogin` |
-| `NEXTBROWSER_DRIVER` | `undetected` (default), `playwright` |
-| `NEXTBROWSER_AUTOMATION` | `playwright` (recommended) |
-| `NEXTBROWSER_PROXY` | `none` (default), `nodemaven`, `custom` |
-| `MULTILOGIN_FOLDER_ID` | MLX folder UUID |
-| `MULTILOGIN_PROFILE_ID` | Default profile UUID |
-| `MULTILOGIN_PROFILE_<KEY>` | Per-profile UUID (uppercase key) |
+| Variable | Purpose |
+|----------|---------|
+| `NEXTBROWSER_USE_CASE` | `scrape` or `accounts` |
+| `NEXTBROWSER_BROWSER` | `native` / `multilogin` |
+| `NEXTBROWSER_DRIVER` | `undetected` (default) / `playwright` |
+| `NEXTBROWSER_PROXY` | `none` / `nodemaven` / `custom` |
+| `MULTILOGIN_FOLDER_ID` | MLX folder UUID (set by setup-wizard) |

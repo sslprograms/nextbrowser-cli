@@ -5,11 +5,7 @@ from pathlib import Path
 from nextbrowser_harness.config import HarnessConfig, resolve_config_path
 from nextbrowser_harness.accounts.registry import AccountRegistry
 from nextbrowser_harness.integrations.browser_use.bridge import browser_use_doctor, load_session
-from nextbrowser_harness.agent_navigation import (
-    AGENT_MUST_KNOW,
-    agent_automation_guide,
-    agent_command_recipes,
-)
+from nextbrowser_harness import agent_rules
 from nextbrowser_harness.platform_paths import cli_command_string, platform_status
 from nextbrowser_harness.onboarding import onboard_from_env, onboard_interactive
 from nextbrowser_harness.tiers.resolver import TierResolver
@@ -18,17 +14,6 @@ from nextbrowser_harness.workflows.browse import browse_site
 from nextbrowser_harness.workflows.exec import exec_site
 from nextbrowser_harness.integrations.multilogin.recommend import multilogin_recommendation
 from nextbrowser_harness.workflows.scraping import ScrapingWorkflow
-
-
-def _substitute_cli_in_obj(obj, cli: str):
-    """Replace {cli} in strings inside dicts/lists for status JSON."""
-    if isinstance(obj, str):
-        return obj.replace("{cli}", cli)
-    if isinstance(obj, list):
-        return [_substitute_cli_in_obj(x, cli) for x in obj]
-    if isinstance(obj, dict):
-        return {k: _substitute_cli_in_obj(v, cli) for k, v in obj.items()}
-    return obj
 
 
 def _agent_fix_hint(error: str, config: HarnessConfig) -> str:
@@ -79,47 +64,39 @@ class Harness:
 
     def status(self) -> dict:
         cli = cli_command_string()
-        recipes = agent_command_recipes()
-        for key, val in list(recipes.items()):
-            if isinstance(val, str) and "{cli}" in val:
-                recipes[key] = val.replace("{cli}", cli)
+        rendered = agent_rules.render(cli)
         tier_hint = None
         if self.config.browser != "multilogin":
             tier_hint = multilogin_recommendation(self.config, url="https://www.reddit.com")
-        guide = _substitute_cli_in_obj(agent_automation_guide(), cli)
-        must_know = [line.replace("{cli}", cli) for line in AGENT_MUST_KNOW]
         return {
-            "agent_must_know": must_know,
-            "version": "0.1.2",
+            "agent_must_know": rendered["must_know"],
+            "version": "0.1.3",
+            "spec": "Nextbrowser Harness MVP v1.3",
             "config": str(resolve_config_path()),
-            "use_case": self.config.use_case,
-            "browser": self.config.browser,
-            "proxy": self.config.proxy,
-            "automation": self.config.automation,
-            "driver": getattr(self.config, "driver", "undetected"),
+            "stack": {
+                "use_case": self.config.use_case,
+                "browser": self.config.browser,
+                "proxy": self.config.proxy,
+                "automation": self.config.automation,
+                "driver": getattr(self.config, "driver", "undetected"),
+                "captcha": "off",
+            },
             "llm": self.config.llm_model or "(inherits from agent)",
             "tier_selection": (
-                "scrape: auto tier from DB + escalate 1→2→3 until success; "
-                "exec/browse tier 3: Multilogin account required (CDP); tier 1–2: native browser OK"
+                "scrape escalates 1→2→3 automatically; "
+                "tier-3 exec requires a registered Multilogin account."
             ),
-            "tier3_automation": guide.get("tier3_policy"),
             "accounts": AccountRegistry(self.config).agent_summary(),
             "browser_use": {
                 "primary_ui": True,
                 "doctor": browser_use_doctor(),
                 "session": load_session(),
-                "connect": f"{cli} browser-use connect --account <name>",
-                "chain_login": (
-                    f'{cli} browser-use chain open "<url>" state "input N user" "click M"'
-                ),
-                "disconnect": f"{cli} browser-use disconnect --account <name>",
-                "run": f"{cli} browser-use run state",
                 "install_skill": f"{cli} browser-use install-skill",
             },
+            "commands": rendered["commands"],
+            "how_to_automate": rendered["guide"],
             "multilogin_recommendation": tier_hint,
             "platform": platform_status(),
-            "agent_navigation": recipes,
-            "how_to_automate": guide,
         }
 
     def scrape(self, url: str, *, tier: int | None = None) -> dict:

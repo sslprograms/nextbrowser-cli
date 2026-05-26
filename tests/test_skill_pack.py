@@ -40,16 +40,18 @@ def test_skill_frontmatter_agentskills():
     assert "windows" in meta.get("platforms", [])
 
 
-def test_skill_teaches_universal_automation():
+def test_skill_teaches_v1_3_workflow():
     root = bundled_skill_dir()
     body = (root / "SKILL.md").read_text(encoding="utf-8")
-    assert "browser-use" in body
-    assert "agent must know" in body.lower() or "must know" in body.lower()
-    assert "browser-use chain" in body
-    assert "disconnect" in body
-    assert "references/browser-use-bridge.md" in body
-    assert "Host paths" not in body
+    assert "v1.3" in body
+    assert "nextbrowser login" in body
+    assert "nextbrowser ui" in body
+    assert "ui close" in body
+    assert "agent_must_know" in body
+    assert "Multilogin" in body and "CDP" in body
+    assert "tier" in body.lower()
     assert (root / "references" / "browser-use-bridge.md").is_file()
+    assert (root / "references" / "troubleshooting.md").is_file()
 
 
 def test_skill_no_secret_env_prompts():

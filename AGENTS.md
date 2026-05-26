@@ -1,19 +1,29 @@
 # Agent instructions
 
-Run **`nextbrowser status`** first — follow **`agent_must_know`** in the JSON.
+Run `nextbrowser status` first. `agent_must_know` in the JSON is canonical.
+
+## Spec — Nextbrowser Harness MVP v1.3
+
+Multimodular browser harness. Two use cases:
+
+1. **Account automation** — Multilogin profile per account, CDP, sticky proxy.
+2. **Scraping** — three tiers, auto-escalation, no account for tier 1–2.
 
 ## Rules
 
-1. Load **browser-use** skill + **nextbrowser-harness** skill.
-2. Ask user: which account / new login / credentials?
-3. `nextbrowser account add <name> --create-mlx` if new profile needed.
-4. `nextbrowser browser-use connect --account <name>` — browser stays open.
-5. **One chain** for login: `nextbrowser browser-use chain open "URL" state "input N user" "click M"`.
-6. Do **not** `browser-use close` or `multilogin stop-all` until done.
-7. `nextbrowser browser-use disconnect --account <name>` when finished.
+1. Load **browser-use** skill + this skill.
+2. Ask user: account name / new login / credentials when missing.
+3. **One login command**: `nextbrowser login <name> --url <url>` (auto-creates account if needed).
+4. **Follow-up actions**: `nextbrowser ui state | click N | type N "text" | eval "..."`.
+5. **End task**: `nextbrowser ui close`.
+6. **Scrape only**: `nextbrowser scrape "<url>" --json`.
 
-## Not for UI
+## Never
 
-Do not use `nextbrowser exec --action state` for clicks/types — use browser-use after connect.
+- `nextbrowser exec --action state/click` for UI (deprecated path).
+- Separate `exec`/`run` per login field — use `login`.
+- `browser-use close` / `multilogin stop-all` before `ui close`.
+- Raw Playwright Python for navigation.
+- Placeholder credentials.
 
 Skill: `skills/nextbrowser-harness/SKILL.md`

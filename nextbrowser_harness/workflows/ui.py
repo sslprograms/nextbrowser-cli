@@ -1,0 +1,153 @@
+"""
+Convenience UI commands for agents — thin wrappers over browser-use that reuse the
+saved CDP session from `nextbrowser login` / `browser-use connect`.
+
+Why this exists: agents previously fumbled `browser-use --cdp-url ...` for every step.
+Now they run `nextbrowser ui state`, `nextbrowser ui click 5`, etc. The browser
+profile stays open between calls because we never stop the MLX session.
+
+`ui close` is the canonical end of a task — it disconnects browser-use and stops
+the MLX profile cleanly.
+"""
+
+from __future__ import annotations
+
+import shlex
+import subprocess
+from dataclasses import asdict, dataclass
+from typing import Any
+
+from nextbrowser_harness.config import HarnessConfig
+from nextbrowser_harness.integrations.browser_use.bridge import (
+    browser_use_bin,
+    disconnect_account,
+    load_session,
+)
+
+
+@dataclass
+class UIResult:
+    success: bool
+    command: str
+    args: list[str]
+    stdout: str = ""
+    stderr: str = ""
+    cdp_url: str = ""
+    account_id: str = ""
+    error: str | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+_NEEDS_INDEX = {"click", "input", "type", "hover", "dblclick", "rightclick", "select", "upload", "get"}
+_ALIASES = {
+    "type": "input",     # ergonomic — `ui type 5 "hello"` runs `input 5 hello`
+    "fill": "input",
+    "submit": "click",
+}
+
+
+def _resolve_cmd(name: str) -> str:
+    return _ALIASES.get(name, name)
+
+
+def run(
+    config: HarnessConfig,
+    command: str,
+    *,
+    args: list[str] | None = None,
+    timeout: int = 60,
+) -> UIResult:
+    """Pass-through to browser-use using the saved CDP from connect/login."""
+    sess = load_session()
+    if not sess or not sess.get("cdp_url"):
+        return UIResult(
+            success=False,
+            command=command,
+            args=args or [],
+            error=(
+                "No browser session. Start with: "
+                "nextbrowser login <account> --url <url>  (or `browser-use connect`)"
+            ),
+        )
+    cdp = sess["cdp_url"]
+    bin_path = browser_use_bin()
+    if not bin_path:
+        return UIResult(
+            success=False,
+            command=command,
+            args=args or [],
+            cdp_url=cdp,
+            account_id=sess.get("account_id", ""),
+            error="browser-use CLI not installed (https://browser-use.com/cli/install.sh).",
+        )
+    cmd = _resolve_cmd(command)
+    cmd_args = list(args or [])
+    proc = subprocess.run(
+        [bin_path, "--cdp-url", cdp, cmd, *cmd_args],
+        capture_output=True,
+        text=True,
+        timeout=timeout,
+    )
+    return UIResult(
+        success=proc.returncode == 0,
+        command=command,
+        args=cmd_args,
+        stdout=(proc.stdout or "")[-8000:],
+        stderr=(proc.stderr or "")[-2000:],
+        cdp_url=cdp,
+        account_id=sess.get("account_id", ""),
+        error=None if proc.returncode == 0 else f"exit {proc.returncode}",
+    )
+
+
+def close(config: HarnessConfig) -> dict[str, Any]:
+    """Disconnect browser-use and stop the MLX profile — end of task."""
+    sess = load_session() or {}
+    account = sess.get("account_id", "")
+    if not account:
+        return {"success": True, "note": "no active session"}
+    return disconnect_account(config, account)
+
+
+def chain(
+    config: HarnessConfig,
+    steps: list[str],
+    *,
+    timeout: int = 300,
+) -> UIResult:
+    """Run multiple steps as ONE shell pipe so browser-use daemon never restarts."""
+    sess = load_session()
+    if not sess or not sess.get("cdp_url"):
+        return UIResult(
+            success=False,
+            command="chain",
+            args=steps,
+            error="No browser session. Start with `nextbrowser login`.",
+        )
+    bin_path = browser_use_bin()
+    if not bin_path:
+        return UIResult(
+            success=False,
+            command="chain",
+            args=steps,
+            error="browser-use CLI not installed.",
+        )
+    cdp = sess["cdp_url"]
+    posix = subprocess.os.name != "nt"
+    segments = []
+    for raw in steps:
+        tokens = shlex.split(raw, posix=posix)
+        segments.append(shlex.join([bin_path, "--cdp-url", cdp, *tokens]))
+    script = " && ".join(segments)
+    proc = subprocess.run(script, shell=True, capture_output=True, text=True, timeout=timeout)
+    return UIResult(
+        success=proc.returncode == 0,
+        command="chain",
+        args=steps,
+        stdout=(proc.stdout or "")[-8000:],
+        stderr=(proc.stderr or "")[-2000:],
+        cdp_url=cdp,
+        account_id=sess.get("account_id", ""),
+    )

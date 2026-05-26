@@ -1,45 +1,32 @@
-"""Agent navigation API — must-know rules exposed in status."""
-
-from pathlib import Path
+"""Back-compat shim — re-exports from agent_rules."""
 
 from nextbrowser_harness.agent_navigation import (
     AGENT_MUST_KNOW,
+    AGENT_NAVIGATION_POLICY,
     agent_automation_guide,
     agent_command_recipes,
 )
-from nextbrowser_harness.browser_actions import load_steps_file
 
 
-def test_agent_must_know_covers_keep_alive_and_chain():
-    text = " ".join(AGENT_MUST_KNOW).lower()
-    assert "chain" in text
-    assert "disconnect" in text
-    assert "stay open" in text or "stays open" in text
-    assert "create-mlx" in text
-    assert "browser-use" in text
+def test_shim_exposes_must_know():
+    assert AGENT_MUST_KNOW
+    assert any("login" in line for line in AGENT_MUST_KNOW)
 
 
-def test_agent_recipes_include_chain_and_disconnect():
+def test_shim_recipes_include_login_and_ui():
     recipes = agent_command_recipes()
-    assert "agent_must_know" in recipes
-    assert "chain" in recipes["browser_use_chain_login"]
-    assert "disconnect" in recipes["browser_use_disconnect"]
+    assert "login" in recipes
+    assert "ui_state" in recipes
+    assert "ui_close" in recipes
 
 
-def test_status_includes_agent_must_know():
-    from nextbrowser_harness.harness import Harness
-
-    st = Harness().status()
-    assert "agent_must_know" in st
-    assert len(st["agent_must_know"]) >= 5
-    assert st["browser_use"].get("chain_login")
-    assert st["browser_use"].get("disconnect")
-    joined = " ".join(st["agent_must_know"]).lower()
-    assert "chain" in joined
+def test_shim_guide_has_use_cases():
+    guide = agent_automation_guide()
+    assert "use_cases" in guide
+    assert "accounts" in guide["use_cases"]
+    assert "scrape" in guide["use_cases"]
 
 
-def test_steps_file_url_used_by_loader():
-    path = Path(__file__).resolve().parent.parent / "examples" / "steps-reddit.json"
-    url, steps = load_steps_file(path)
-    assert url.startswith("https://")
-    assert any(s.type == "eval" for s in steps)
+def test_policy_string_mentions_login_and_ui():
+    assert "login" in AGENT_NAVIGATION_POLICY
+    assert "ui" in AGENT_NAVIGATION_POLICY

@@ -1,94 +1,156 @@
 ---
 name: nextbrowser-harness
 description: >-
-  Multilogin accounts + CDP for browser-use. Agents MUST keep MLX browser open during
-  login (use browser-use chain), ask user for account/credentials, create profiles with
-  account add --create-mlx, disconnect when done. UI via browser-use skill only.
+  Multimodular browser harness (MVP v1.3). Two use cases: account automation
+  (Multilogin + CDP) and tiered scraping (HTTP → headless → headful). Single
+  command for login (keeps browser open, persists cookies). Pairs with the
+  browser-use skill for UI control. Ask user for account name and credentials
+  when missing.
 version: 1.3.0
 license: MIT
 homepage: https://github.com/sslprograms/nextbrowser-cli
 user-invocable: true
 compatibility: >-
-  Python 3.10+. browser-use CLI + Multilogin X. Install both skills via agent install --with-browser-use.
+  Python 3.10+. Multilogin X + browser-use CLI for tier 3. macOS, Linux, Windows.
 platforms:
   - macos
   - linux
   - windows
 ---
 
-# Nextbrowser + browser-use
+# Nextbrowser Harness v1.3
 
-**Read this first.** Run `nextbrowser status` and follow `agent_must_know` in the JSON.
+Run `nextbrowser status` first. `agent_must_know` in the JSON is canonical.
 
-Load the **[browser-use](https://github.com/browser-use/browser-use) skill** for UI. This skill covers Multilogin accounts and keeping the browser open.
+Pair this skill with the **[browser-use](https://github.com/browser-use/browser-use)** skill — it owns all UI primitives.
 
-## Agent must know (non-negotiable)
+## Architecture (4-layer stack)
 
-1. **UI = browser-use only** — not `nextbrowser exec --action state` / `click`.
-2. **Ask the user** before tier-3 work: which account? new login? username/password?
-3. **Create MLX profile:** `nextbrowser account add <name> --create-mlx` — check `mlx_profile_id` in JSON and in Multilogin app.
-4. **Connect once:** `nextbrowser browser-use connect --account <name>` — browser **stays open**.
-5. **Whole login in ONE chain** — cookies save in Multilogin only if the profile is not closed between steps:
-   ```bash
-   nextbrowser browser-use chain open "<url>" state "input 12 REAL_USER" "input 15 REAL_PASS" "click 20"
-   ```
-6. **Never during login:** `browser-use close`, `multilogin stop-all`, separate `exec`/`run` per field.
-7. **When done:** `nextbrowser browser-use disconnect --account <name>`.
-8. **Scrape only:** `nextbrowser scrape "<url>" --json` (no account).
+| Layer | MVP integrations | Default |
+|-------|------------------|---------|
+| Browser | native · multilogin · gologin · octo | native (anti-detect tuned) |
+| Proxy | nodemaven · custom · none | nodemaven residential |
+| Automation | browser_use · playwright | browser_use (via CDP) |
+| CAPTCHA | optional 2Captcha / CapMonster token | off |
 
-## Quick start
+LLM inherits from the host agent — no API key prompt.
+
+## Two use cases
+
+### 1. Account automation (tier 3 — Multilogin + CDP)
+
+Single reliable login command:
 
 ```bash
-nextbrowser status
-nextbrowser agent install --force --with-browser-use
+nextbrowser login <account_name> --url <login_url> \
+  --username-index N --password-index N --submit-index N \
+  --username "<user>" --password "<pass>"
+```
+
+What it does:
+
+1. Creates the Multilogin profile if `<account_name>` doesn't exist yet.
+2. Connects MLX over CDP (browser stays open — keep-alive).
+3. Opens the URL, runs `state` to list element indices.
+4. If indices + credentials are provided, runs `input` → `input` → `click` → `state` in **one chain**.
+5. Returns JSON: `cdp_url`, `mlx_profile_id`, `state`, `logged_in`, `next_commands`.
+
+Two-pass login (when you need indices first):
+
+```bash
+# Pass 1: open and read indices
+nextbrowser login reddit_main --url "https://www.reddit.com/login"
+# → returns state output with [N] labels
+
+# Pass 2: feed real credentials + indices
+nextbrowser login reddit_main --url "https://www.reddit.com/login" \
+  --username-index 12 --password-index 15 --submit-index 20 \
+  --username "$RU" --password "$RP"
+```
+
+Then continue with the same open browser:
+
+```bash
+nextbrowser ui state
+nextbrowser ui click 5
+nextbrowser ui type 3 "hello"
+nextbrowser ui eval "document.title"
+nextbrowser ui screenshot out.png
+nextbrowser ui close      # end of task — disconnects MLX cleanly
+```
+
+### 2. Web scraping (3 tiers, auto-escalation)
+
+```bash
+nextbrowser scrape "<url>" --json     # tier from DB, escalates on failure
+nextbrowser tier lookup "<url>"       # show recommended tier + MLX hint
+```
+
+| Tier | What | When |
+|------|------|------|
+| 1 | HTTP only | APIs, static HTML |
+| 2 | Headless browser | Most modern sites |
+| 3 | Headful + Multilogin + residential | Reddit-class anti-bot |
+
+Tier-3 scraping needs a registered account (same as use case 1).
+
+## Onboarding (under 60 seconds)
+
+```bash
+pip install -e ".[playwright,undetected]"
+playwright install chromium
+nextbrowser init --env
 nextbrowser multilogin setup-wizard
 curl -fsSL https://browser-use.com/cli/install.sh | bash
+nextbrowser agent install --force --with-browser-use
 ```
 
-## Full login flow (copy for agents)
+## Account management
 
 ```bash
-# 1. Ask user which account; or create:
-nextbrowser account add reddit_main --create-mlx --display-name "Reddit Main"
-
-# 2. Connect — MLX stays open
-nextbrowser browser-use connect --account reddit_main
-
-# 3. ONE chain (get indices from state step; credentials from user)
-nextbrowser browser-use chain open "https://www.reddit.com/login" state "input 12 USER" "input 15 PASS" "click 20"
-
-# 4. Only when user confirms login is complete
-nextbrowser browser-use disconnect --account reddit_main
+nextbrowser account list
+nextbrowser account add <name> --create-mlx --site reddit.com
+nextbrowser account add <name> --mlx-profile <existing-uuid>
 ```
 
-## Command roles
+`--create-mlx` calls Multilogin API to create a new browser profile in your folder and binds it to the account name. Verify the profile appears in the Multilogin X app.
 
-| Tool | Use for |
+## Agent rules (non-negotiable)
+
+1. **`nextbrowser status`** first — read `agent_must_know`.
+2. **Ask user** which account to use; ask for credentials when missing.
+3. **One `login` call**, not separate exec/run per field.
+4. **`nextbrowser ui ...`** for follow-up actions — browser stays open.
+5. **`nextbrowser ui close`** only when the task is fully done.
+6. **No** `browser-use close`, `multilogin stop-all`, or raw Playwright Python during a task.
+7. Scrape-only? `nextbrowser scrape URL --json` — no account needed.
+
+## Command map
+
+| Goal | Command |
 |------|---------|
-| **nextbrowser** | `status`, `account list/add`, `browser-use connect/chain/disconnect`, `scrape`, MLX setup |
-| **browser-use** | `state`, `click`, `input`, `screenshot`, `eval` (after connect) |
+| Read agent rules | `nextbrowser status` |
+| First-time login | `nextbrowser login <account> --url <url>` |
+| Re-use session | `nextbrowser ui state` / `click N` / `type N text` |
+| End task | `nextbrowser ui close` |
+| Scrape | `nextbrowser scrape "<url>" --json` |
+| Tier check | `nextbrowser tier lookup "<url>"` |
+| MLX health | `nextbrowser multilogin doctor` |
 
-## Live rules from CLI
+## References
+
+- [references/browser-use-bridge.md](references/browser-use-bridge.md)
+- [references/troubleshooting.md](references/troubleshooting.md)
+- [references/commands.md](references/commands.md)
+
+## Verify
 
 ```bash
 nextbrowser status
+nextbrowser account list
+nextbrowser multilogin doctor
+browser-use doctor
+nextbrowser login <name> --url https://example.com
+nextbrowser ui state
+nextbrowser ui close
 ```
-
-Fields: `agent_must_know`, `browser_use`, `accounts`, `agent_navigation`, `how_to_automate`.
-
-## Hard rules
-
-- Chain login — do not split into multiple exec/run commands.
-- Keep browser open until `disconnect`.
-- Real credentials from user only.
-- No Playwright Python.
-
-## Troubleshooting
-
-| Problem | Fix |
-|---------|-----|
-| Browser closes mid-login | Use `browser-use chain`, not per-step exec |
-| Profile missing in MLX | `account add ... --create-mlx` again; `multilogin doctor` |
-| No CDP | `browser-use connect --account <name>` first |
-
-[references/browser-use-bridge.md](references/browser-use-bridge.md) · [references/troubleshooting.md](references/troubleshooting.md)

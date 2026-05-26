@@ -1,74 +1,64 @@
-# Troubleshooting (agents)
+# Troubleshooting
 
-## Tier 3: missing account
+Same fixes on every agent host.
 
-**Symptom:** `success: false`, `agent_prompt` about “Which saved account” or “named account”.
+## Login closes between steps
 
-```bash
-nextbrowser account list
-nextbrowser account add <name> --create-mlx
-```
+- Use `nextbrowser login <name> --url <url>` (one command).
+- For follow-ups use `nextbrowser ui state / click N / type N text`.
+- **Never** `nextbrowser exec --action state` per click — that path is deprecated for UI.
+- **Never** `browser-use close` or `multilogin stop-all` before `nextbrowser ui close`.
 
-Ask the user which name to use or whether to create a new login.
-
-## Tier 3: missing credentials
-
-**Symptom:** `agent_prompt` about username/password or placeholders.
-
-Ask the user for real credentials. Retry with:
+## Profile missing in Multilogin app
 
 ```bash
-<cli> exec "<url>" --account <name> --var username=REAL --var password=REAL
-# or
-<cli> exec "<url>" --account <name> --action "type:N|REAL"
+nextbrowser multilogin doctor          # launcher + token
+nextbrowser account add <name> --create-mlx --display-name "Label"
 ```
 
-Do not use `USER`, `PASS`, or empty `--var` values.
+JSON shows `mlx_profile_id`. Open the Multilogin X app → same folder → profile must be listed.
 
-## CLI not found
+## Missing credentials
+
+`nextbrowser login` fails with `placeholder credentials` if `--username` or `--password` look like placeholders (`USER`, `PASS`, empty, `$VAR`). Ask the user for real values.
+
+## No CDP session
+
+`nextbrowser ui <cmd>` returns `No browser session.` →
 
 ```bash
-nextbrowser status
+nextbrowser browser-use session     # check saved session
+nextbrowser login <name> --url <url>
 ```
 
-Use `platform.cli` from JSON. `pip install -e .` and activate venv.
-
-## Skill not loading
-
-```bash
-nextbrowser agent install --force
-nextbrowser agent doctor
-```
-
-New agent session after install.
-
-## Element clicks fail (SPA / shadow DOM)
-
-Tier 3 — always include account and use indices:
-
-```bash
-<cli> exec "<url>" --account <name> --action goto --action state
-<cli> exec "<url>" --account <name> --action "click:N"
-```
-
-## MLX / CDP
+## MLX launcher issues
 
 | Symptom | Fix |
 |---------|-----|
-| Launcher not reachable | Start MLX desktop; `multilogin doctor` |
-| Signin 400 | MLX app credentials at multilogin.com |
-| Token 400 | `multilogin automation-token` after signin |
-| Profile already running | `multilogin stop-all` |
+| Launcher not reachable | Start the Multilogin X desktop app, then `multilogin doctor` |
+| Token 401 | `multilogin signin` then `multilogin automation-token` |
 | Linux launcher broken | `multilogin fix-linux-launcher` |
-| No CDP port | Launcher must be running; check doctor |
+| Profile already running | `multilogin stop-all`, then `login` again |
+
+## browser-use CLI missing
+
+```bash
+curl -fsSL https://browser-use.com/cli/install.sh | bash
+browser-use doctor
+```
 
 ## Playwright missing
 
 ```bash
 pip install -e ".[playwright]"
 playwright install chromium
+playwright install-deps chromium    # Linux headless
 ```
 
-## Agent wrote Playwright Python
+## Agent wrote raw Playwright
 
-Reload skill — use `exec` / `scrape` / `account` only.
+Reload skill — UI is browser-use only.
+
+## Sandboxed agent
+
+Python, this package, Playwright, Chromium, and browser-use must all be inside the sandbox.

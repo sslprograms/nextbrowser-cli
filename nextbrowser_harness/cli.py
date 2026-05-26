@@ -189,6 +189,62 @@ def main(argv: list[str] | None = None) -> int:
         help="Skill dir (default: ~/.cursor/skills/browser-use)",
     )
 
+    p_login = sub.add_parser(
+        "login",
+        help="One-shot tier-3 login: ensure account, connect MLX, open URL, optional credentials",
+    )
+    p_login.add_argument("account_id", help="Account name (created automatically if missing)")
+    p_login.add_argument("--url", required=True, help="URL to open")
+    p_login.add_argument("--username", default=None)
+    p_login.add_argument("--password", default=None)
+    p_login.add_argument(
+        "--username-index", type=int, default=None, help="Element index from state (chain login)"
+    )
+    p_login.add_argument("--password-index", type=int, default=None)
+    p_login.add_argument("--submit-index", type=int, default=None)
+    p_login.add_argument("--site", default="", help="Site label for new account")
+    p_login.add_argument(
+        "--no-create",
+        action="store_true",
+        help="Fail if account is not already registered (no auto-create)",
+    )
+    p_login.add_argument(
+        "--close",
+        action="store_true",
+        help="Disconnect MLX when finished (default: keep open for follow-up `ui` commands)",
+    )
+
+    p_ui = sub.add_parser(
+        "ui",
+        help="Browser-use UI commands using the active CDP session (state, click N, type N text, close)",
+    )
+    ui_sub = p_ui.add_subparsers(dest="ui_cmd", required=True)
+    ui_sub.add_parser("state", help="List clickable elements with indices")
+    p_ui_open = ui_sub.add_parser("open", help="Navigate to URL")
+    p_ui_open.add_argument("url")
+    p_ui_click = ui_sub.add_parser("click", help="Click by index")
+    p_ui_click.add_argument("index")
+    p_ui_type = ui_sub.add_parser("type", help="Type into element by index")
+    p_ui_type.add_argument("index")
+    p_ui_type.add_argument("text")
+    p_ui_input = ui_sub.add_parser("input", help="Alias of `type`")
+    p_ui_input.add_argument("index")
+    p_ui_input.add_argument("text")
+    p_ui_keys = ui_sub.add_parser("keys", help="Send keys (Enter, Control+a, ...)")
+    p_ui_keys.add_argument("combo")
+    p_ui_eval = ui_sub.add_parser("eval", help="Run JavaScript")
+    p_ui_eval.add_argument("code")
+    p_ui_screenshot = ui_sub.add_parser("screenshot", help="Take screenshot")
+    p_ui_screenshot.add_argument("path", nargs="?", default=None)
+    p_ui_chain = ui_sub.add_parser(
+        "chain",
+        help="Run multiple browser-use steps in one shell (keeps browser open)",
+    )
+    p_ui_chain.add_argument("steps", nargs="+")
+    p_ui_raw = ui_sub.add_parser("run", help="Pass arbitrary args to browser-use")
+    p_ui_raw.add_argument("bu_args", nargs=argparse.REMAINDER)
+    ui_sub.add_parser("close", help="Disconnect browser-use and stop MLX profile (end of task)")
+
     p_mlx = sub.add_parser("multilogin", help="Multilogin X API (see Postman docs)")
     mlx_sub = p_mlx.add_subparsers(dest="mlx_cmd", required=True)
     p_mlx_signin = mlx_sub.add_parser("signin", help="Sign in and save tokens")
@@ -568,6 +624,62 @@ def main(argv: list[str] | None = None) -> int:
             out = harness.run_accounts(args.account_id, task, url=args.url)
             print(json.dumps(out, indent=2))
             return 0 if out.get("success") else 1
+
+    if args.command == "login":
+        from nextbrowser_harness.workflows.login import login as login_workflow
+
+        res = login_workflow(
+            harness.config,
+            args.account_id,
+            url=args.url,
+            username=args.username,
+            password=args.password,
+            username_index=args.username_index,
+            password_index=args.password_index,
+            submit_index=args.submit_index,
+            site=args.site,
+            create_if_missing=not args.no_create,
+            keep_open=not args.close,
+        )
+        print(json.dumps(res.to_dict(), indent=2))
+        return 0 if res.success else 1
+
+    if args.command == "ui":
+        from nextbrowser_harness.workflows import ui as ui_workflow
+
+        cmd = args.ui_cmd
+        if cmd == "close":
+            out = ui_workflow.close(harness.config)
+            print(json.dumps(out, indent=2))
+            return 0 if out.get("success") else 1
+        if cmd == "chain":
+            res = ui_workflow.chain(harness.config, args.steps)
+            print(json.dumps(res.to_dict(), indent=2))
+            return 0 if res.success else 1
+        if cmd == "run":
+            bu_args = [a for a in (args.bu_args or []) if a != "--"]
+            if not bu_args:
+                print(json.dumps({"success": False, "error": "no args"}, indent=2))
+                return 1
+            res = ui_workflow.run(harness.config, bu_args[0], args=bu_args[1:])
+            print(json.dumps(res.to_dict(), indent=2))
+            return 0 if res.success else 1
+        ui_args: list[str] = []
+        if cmd in ("click", "input", "type"):
+            ui_args.append(str(args.index))
+            if cmd in ("input", "type"):
+                ui_args.append(args.text)
+        elif cmd == "open":
+            ui_args.append(args.url)
+        elif cmd == "keys":
+            ui_args.append(args.combo)
+        elif cmd == "eval":
+            ui_args.append(args.code)
+        elif cmd == "screenshot" and args.path:
+            ui_args.append(args.path)
+        res = ui_workflow.run(harness.config, cmd, args=ui_args)
+        print(json.dumps(res.to_dict(), indent=2))
+        return 0 if res.success else 1
 
     if args.command in ("browser-use", "bu"):
         from nextbrowser_harness.accounts.registry import Tier3AccountError

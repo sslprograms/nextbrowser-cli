@@ -2,9 +2,15 @@ from nextbrowser_harness.config import HarnessConfig
 from nextbrowser_harness.integrations.multilogin.recommend import multilogin_recommendation
 
 
-def test_recommends_mlx_for_reddit_native_browser():
-    cfg = HarnessConfig(browser="native", use_case="scrape")
-    hint = multilogin_recommendation(cfg, "https://www.reddit.com")
+def test_recommends_mlx_for_reddit_native_browser(tmp_path):
+    cfg = HarnessConfig(
+        browser="native",
+        use_case="scrape",
+        tier_cache_path=str(tmp_path / "tier_cache.yaml"),
+    )
+    hint = multilogin_recommendation(
+        cfg, "https://www.reddit.com", cache_path=cfg.tier_cache_path
+    )
     assert hint is not None
     assert hint["recommend_multilogin"] is True
     assert hint["tier_recommended"] == 3
