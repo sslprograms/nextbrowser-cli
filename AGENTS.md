@@ -14,10 +14,11 @@ Multimodular browser harness. Two use cases:
 1. Load **browser-use** skill + this skill.
 2. Ask user: account name / new login / credentials when missing.
 3. **Manual login**: `nextbrowser login <name> --url <url>` (auto-creates account if needed).
-4. **AI agent task**: `nextbrowser agent-run "<task>" --account <name>` (fully autonomous).
-5. **Follow-up actions**: `nextbrowser ui state | click N | type N "text" | eval "..."`.
-6. **End task**: `nextbrowser ui close`.
-7. **Scrape only**: `nextbrowser scrape "<url>" --json`.
+4. **AI agent task**: `nextbrowser agent-run "<task>" --account <name>` (scroll/comment on Reddit — stops MLX when done).
+5. **Know what tab is showing**: `nextbrowser ui situation` before claiming logged in/out — never guess from memory.
+6. **Follow-up actions**: `nextbrowser ui state | click N | type N "text" | eval "..."`.
+7. **End task**: `nextbrowser ui close`.
+8. **Scrape only**: `nextbrowser scrape "<url>" --json`.
 
 ## Never
 

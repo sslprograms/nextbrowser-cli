@@ -224,6 +224,20 @@ def main(argv: list[str] | None = None) -> int:
         help="Live snapshot: URL, logged-in estimate, registry mismatch hints, element map snippet",
     )
     ui_sub.add_parser("state", help="List clickable elements with indices")
+    p_ui_scroll = ui_sub.add_parser("scroll", help="Scroll page (browser-use scroll)")
+    p_ui_scroll.add_argument(
+        "direction",
+        nargs="?",
+        default="down",
+        choices=["down", "up"],
+        help="Scroll direction (default: down)",
+    )
+    p_ui_scroll.add_argument(
+        "--pages",
+        type=float,
+        default=1.0,
+        help="Number of pages to scroll (e.g. 0.5, 1, 2)",
+    )
     p_ui_open = ui_sub.add_parser("open", help="Navigate to URL")
     p_ui_open.add_argument("url")
     p_ui_click = ui_sub.add_parser("click", help="Click by index")
@@ -266,6 +280,11 @@ def main(argv: list[str] | None = None) -> int:
     p_agent_run.add_argument("--captcha", action="store_true", help="Enable captcha solving guidance")
     p_agent_run.add_argument("--approval", action="store_true", help="Enable content approval mode")
     p_agent_run.add_argument("--headless", action="store_true", help="Run MLX browser headless")
+    p_agent_run.add_argument(
+        "--keep-open",
+        action="store_true",
+        help="Leave Multilogin profile running after task (default: stop profile when done)",
+    )
 
     p_mlx = sub.add_parser("multilogin", help="Multilogin X API (see Postman docs)")
     mlx_sub = p_mlx.add_subparsers(dest="mlx_cmd", required=True)
@@ -660,6 +679,7 @@ def main(argv: list[str] | None = None) -> int:
             enable_approval=args.approval,
             max_steps=args.max_steps,
             headless=args.headless,
+            keep_open=args.keep_open,
         )
         print(json.dumps(res.to_dict(), indent=2))
         return 0 if res.success else 1
@@ -687,6 +707,14 @@ def main(argv: list[str] | None = None) -> int:
         from nextbrowser_harness.workflows import ui as ui_workflow
 
         cmd = args.ui_cmd
+        if cmd == "scroll":
+            res = ui_workflow.scroll(
+                harness.config,
+                args.direction,
+                args.pages,
+            )
+            print(json.dumps(res.to_dict(), indent=2))
+            return 0 if res.success else 1
         if cmd == "situation":
             out = ui_workflow.situation(harness.config)
             print(json.dumps(out, indent=2))

@@ -13,8 +13,6 @@ Agents call this **once** per login. They do not need to chain manually.
 
 from __future__ import annotations
 
-import json
-import os
 import re
 import shlex
 import subprocess

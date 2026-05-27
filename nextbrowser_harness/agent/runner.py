@@ -19,6 +19,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import re
 import time
 from dataclasses import asdict, dataclass, field
 from typing import Any
@@ -26,7 +27,6 @@ from typing import Any
 from nextbrowser_harness.accounts.registry import AccountRegistry, Tier3AccountError
 from nextbrowser_harness.config import HarnessConfig
 from nextbrowser_harness.integrations.browser_use.bridge import connect_account, load_session
-from nextbrowser_harness.integrations.multilogin.session import mark_keep_alive
 
 from .prompts.account_context import account_context_prompt
 from .prompts.captcha import CAPTCHA_PROMPT
@@ -81,6 +81,11 @@ def _get_llm(model_name: str):
         return ChatOpenAI(model=model_name, timeout=LLM_TIMEOUT)
 
 
+def _needs_reddit_guidance(*, task: str = "", url: str = "", site: str = "") -> bool:
+    blob = f"{task} {url} {site}".lower()
+    return "reddit.com" in blob or re.search(r"\breddit\b", blob) is not None
+
+
 def _build_system_prompt(
     account_id: str | None = None,
     site: str = "",
@@ -88,9 +93,16 @@ def _build_system_prompt(
     display_name: str = "",
     enable_captcha: bool = False,
     enable_approval: bool = False,
+    task: str = "",
+    url: str = "",
 ) -> tuple[str, str]:
     """Return (override_system_message, extend_system_message)."""
     extensions = [INTERACTIVE_ELEMENTS_GUIDANCE, TAB_GUIDANCE]
+
+    if _needs_reddit_guidance(task=task, url=url, site=site):
+        from .prompts.reddit import REDDIT_GUIDANCE
+
+        extensions.append(REDDIT_GUIDANCE)
 
     if account_id:
         extensions.append(
@@ -287,6 +299,7 @@ async def _run_agent_async(
     enable_approval: bool = False,
     max_steps: int = MAX_STEPS,
     downloads_dir: str | None = None,
+    url: str = "",
 ) -> AgentRunResult:
     """Core async agent loop — connects to CDP and runs browser-use Agent."""
     from browser_use import Agent, BrowserProfile, BrowserSession
@@ -298,6 +311,8 @@ async def _run_agent_async(
         display_name=display_name,
         enable_captcha=enable_captcha,
         enable_approval=enable_approval,
+        task=task,
+        url=url,
     )
 
     dl_dir = downloads_dir or os.path.join(
@@ -357,6 +372,11 @@ async def _run_agent_async(
     except Exception as e:
         logger.error(f"Agent run failed: {e}", exc_info=True)
         result.error = str(e)
+    finally:
+        try:
+            await agent.close()
+        except Exception:
+            pass
 
     return result
 
@@ -372,6 +392,7 @@ def run_agent(
     enable_approval: bool = False,
     max_steps: int = MAX_STEPS,
     headless: bool = False,
+    keep_open: bool = False,
 ) -> AgentRunResult:
     """
     Synchronous entry point — start MLX profile, connect CDP, run the AI agent.
@@ -425,20 +446,49 @@ def run_agent(
                 error="No CDP session. Run `nextbrowser login <account> --url <url>` first.",
             )
 
+    nav_url = url or ""
     if url:
         task = f"First navigate to {url}, then: {task}"
 
-    return asyncio.run(
-        _run_agent_async(
-            cdp_url,
-            task,
-            model_name,
-            account_id=account_id or "",
-            site=site,
-            logged_in=logged_in,
-            display_name=display_name,
-            enable_captcha=enable_captcha,
-            enable_approval=enable_approval,
-            max_steps=max_steps,
+    try:
+        result = asyncio.run(
+            _run_agent_async(
+                cdp_url,
+                task,
+                model_name,
+                account_id=account_id or "",
+                site=site,
+                logged_in=logged_in,
+                display_name=display_name,
+                enable_captcha=enable_captcha,
+                enable_approval=enable_approval,
+                max_steps=max_steps,
+                url=nav_url,
+            )
         )
-    )
+    except Exception as e:
+        result = AgentRunResult(
+            success=False,
+            account_id=account_id or "",
+            task=task,
+            cdp_url=cdp_url,
+            error=str(e),
+        )
+    finally:
+        # Like next-browser task-runner: stop MLX when the task ends (unless --keep-open).
+        if not keep_open and account_id:
+            from nextbrowser_harness.integrations.browser_use.bridge import disconnect_account
+
+            try:
+                disconnect_account(config, account_id)
+            except Exception as e:
+                logger.warning("disconnect after agent-run failed: %s", e)
+
+    if not keep_open and account_id:
+        result.agent_prompt = (
+            (result.agent_prompt or "")
+            + " Multilogin profile was stopped after this run (default). "
+            "Use --keep-open to leave the browser running for manual follow-up."
+        ).strip()
+
+    return result

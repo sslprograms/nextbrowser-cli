@@ -53,7 +53,7 @@ What it does:
 2. Connects MLX over CDP (browser stays open — keep-alive).
 3. Opens the URL, runs `state` to list element indices.
 4. If indices + credentials are provided, runs `input` → `input` → `click` → `state` in **one chain**.
-5. Returns JSON: `cdp_url`, `mlx_profile_id`, `state`, `logged_in`, `next_commands`.
+5. Returns JSON: `cdp_url`, `mlx_profile_id`, `state`, `logged_in`, `logged_in_reason` (why that estimate), `next_commands`.
 
 Two-pass login (when you need indices first):
 
@@ -71,7 +71,9 @@ nextbrowser login reddit_main --url "https://www.reddit.com/login" \
 Then continue with the same open browser:
 
 ```bash
-nextbrowser ui state
+nextbrowser ui situation   # current URL, logged-in estimate, registry hints, element snippet
+nextbrowser ui scroll down --pages 1   # manual scroll (feeds); agent-run scrolls automatically
+```
 nextbrowser ui click 5
 nextbrowser ui type 3 "hello"
 nextbrowser ui eval "document.title"
@@ -143,6 +145,9 @@ Options:
 | `--max-steps N` | Step limit (default: 100) |
 | `--captcha` | Enable captcha solving guidance |
 | `--approval` | Enable content approval mode (social posts, emails) |
+| `--keep-open` | Leave Multilogin running after task (default: **stops** profile when done) |
+
+**Reddit comments / scrolling:** use `agent-run` (not manual `ui click` only). The agent gets Reddit-specific prompts and native `scroll` actions like next-browser.
 
 The agent uses the same prompt architecture as next-browser-main:
 - `[N]<type>text</type>` indexed elements for grounding
@@ -153,18 +158,19 @@ The agent uses the same prompt architecture as next-browser-main:
 ## Agent rules (non-negotiable)
 
 1. **`nextbrowser status`** first — read `agent_must_know`.
-2. **Ask user** which account to use; ask for credentials when missing.
-3. **One `login` call** for manual login, or **`agent-run`** for fully autonomous tasks.
-4. **`nextbrowser ui ...`** for follow-up actions after login — browser stays open.
-5. **`nextbrowser ui close`** only when the task is fully done.
-6. **No** `browser-use close`, `multilogin stop-all`, or raw Playwright Python during a task.
-7. Scrape-only? `nextbrowser scrape URL --json` — no account needed.
+2. **Never guess logged-in**: run `nextbrowser ui situation` against the live CDP tab (`logged_in` may be null = uncertain).
+3. **Ask user** which account to use; ask for credentials when missing.
+4. **One `login` call** for manual login, or **`agent-run`** for fully autonomous tasks.
+5. **`nextbrowser ui situation`**, then **`nextbrowser ui ...`** for follow-ups — browser stays open.
+6. **`nextbrowser ui close`** only when the task is fully done.
+7. **No** `browser-use close`, `multilogin stop-all`, or raw Playwright Python during a task.
+8. Scrape-only? `nextbrowser scrape URL --json` — no account needed.
 
 ## Command map
 
 | Goal | Command |
 |------|---------|
-| Read agent rules | `nextbrowser status` |
+| Read live tab + logged-in estimate | `nextbrowser ui situation` |
 | First-time login | `nextbrowser login <account> --url <url>` |
 | AI-driven task | `nextbrowser agent-run "<task>" --account <name>` |
 | Re-use session | `nextbrowser ui state` / `click N` / `type N text` |

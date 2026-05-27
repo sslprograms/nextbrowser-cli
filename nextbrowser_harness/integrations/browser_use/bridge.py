@@ -153,10 +153,11 @@ def connect_account(
             'nextbrowser browser-use chain open "<url>" state "input 3 user" "click 5"',
         ],
         "agent_must_know": [
-            "MLX browser is open and will STAY open until browser-use disconnect.",
-            "Run the full login in ONE command: nextbrowser browser-use chain open URL state input click.",
-            "Do NOT run separate exec/run per field. Do NOT browser-use close or multilogin stop-all.",
-            f"When login is complete: nextbrowser browser-use disconnect --account {account_id}",
+            "MLX browser is open for this session until you disconnect or a task finishes.",
+            "Login chains: one browser-use chain — do not split per field.",
+            "When done with manual steps: nextbrowser ui close (stops Multilogin).",
+            "Autonomous tasks: nextbrowser agent-run stops Multilogin when done (default).",
+            f"Emergency stop all profiles: nextbrowser multilogin stop-all",
         ],
         "agent_prompt": (
             f"MLX profile '{account_id}' is running (keep_alive). "

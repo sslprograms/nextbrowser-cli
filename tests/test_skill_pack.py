@@ -49,6 +49,7 @@ def test_skill_teaches_v1_3_workflow():
     assert "ui close" in body
     assert "agent_must_know" in body
     assert "Multilogin" in body and "CDP" in body
+    assert "nextbrowser ui situation" in body
     assert "tier" in body.lower()
     assert (root / "references" / "browser-use-bridge.md").is_file()
     assert (root / "references" / "troubleshooting.md").is_file()

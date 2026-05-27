@@ -4,6 +4,7 @@ from unittest.mock import patch
 
 from nextbrowser_harness.config import HarnessConfig
 from nextbrowser_harness.workflows.browser_intel import infer_logged_in_from_state
+from nextbrowser_harness.workflows.login import login
 
 
 def _cfg(tmp_path):

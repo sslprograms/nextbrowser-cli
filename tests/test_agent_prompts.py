@@ -96,6 +96,14 @@ def test_build_system_prompt_with_approval():
     assert "should_be_approved" in extend
 
 
+def test_reddit_guidance_injected_for_reddit_task():
+    from nextbrowser_harness.agent.runner import _build_system_prompt, _needs_reddit_guidance
+
+    assert _needs_reddit_guidance(task="comment on reddit post", url="https://reddit.com/r/test")
+    _, extend = _build_system_prompt(task="comment on reddit", url="https://reddit.com")
+    assert "reddit_automation" in extend.lower()
+
+
 def test_build_system_prompt_has_execution_verification():
     _, extend = _build_system_prompt()
     assert "execution_verification" in extend

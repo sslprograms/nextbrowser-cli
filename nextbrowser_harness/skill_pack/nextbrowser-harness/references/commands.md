@@ -31,6 +31,7 @@ Use `platform.cli` from `nextbrowser status` if `nextbrowser` is not on PATH.
 | `nextbrowser account add <name> --mlx-profile <uuid>` | Link existing MLX profile |
 | `nextbrowser login <name> --url <url>` | One-shot login (open + state + optional credentials) |
 | `nextbrowser login <name> --url <url> --username U --password P --username-index 12 --password-index 15 --submit-index 20` | Chained login |
+| `nextbrowser ui situation` | Live URL, logged-in heuristic, registry vs page hints, element map snippet |
 | `nextbrowser ui state` | List clickable elements |
 | `nextbrowser ui open <url>` | Navigate |
 | `nextbrowser ui click <N>` | Click by index |

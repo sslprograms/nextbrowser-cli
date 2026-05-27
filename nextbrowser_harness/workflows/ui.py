@@ -165,6 +165,30 @@ def situation(config: HarnessConfig, *, timeout: int = 60) -> dict[str, Any]:
     return out
 
 
+def scroll(
+    config: HarnessConfig,
+    direction: str = "down",
+    pages: float = 1.0,
+    *,
+    timeout: int = 60,
+) -> UIResult:
+    """
+    Scroll the page via browser-use (feed posts, lazy-loaded comments).
+
+    Tries common CLI shapes; use `ui run scroll ...` if your browser-use version differs.
+    """
+    pages_s = str(pages)
+    for args in (
+        ["scroll", direction, pages_s],
+        ["scroll", f"{direction}", "--num-pages", pages_s],
+        ["scroll", "--direction", direction, "--num-pages", pages_s],
+    ):
+        res = run(config, "scroll", args=args, timeout=timeout)
+        if res.success:
+            return res
+    return res
+
+
 def close(config: HarnessConfig) -> dict[str, Any]:
     """Disconnect browser-use and stop the MLX profile — end of task."""
     sess = load_session() or {}
