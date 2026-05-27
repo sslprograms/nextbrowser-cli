@@ -13,10 +13,11 @@ Multimodular browser harness. Two use cases:
 
 1. Load **browser-use** skill + this skill.
 2. Ask user: account name / new login / credentials when missing.
-3. **One login command**: `nextbrowser login <name> --url <url>` (auto-creates account if needed).
-4. **Follow-up actions**: `nextbrowser ui state | click N | type N "text" | eval "..."`.
-5. **End task**: `nextbrowser ui close`.
-6. **Scrape only**: `nextbrowser scrape "<url>" --json`.
+3. **Manual login**: `nextbrowser login <name> --url <url>` (auto-creates account if needed).
+4. **AI agent task**: `nextbrowser agent-run "<task>" --account <name>` (fully autonomous).
+5. **Follow-up actions**: `nextbrowser ui state | click N | type N "text" | eval "..."`.
+6. **End task**: `nextbrowser ui close`.
+7. **Scrape only**: `nextbrowser scrape "<url>" --json`.
 
 ## Never
 

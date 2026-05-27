@@ -93,6 +93,8 @@ def command_recipes() -> dict:
         "automation": automation_guide(),
         "login": "{cli} login <account> --url <url>",
         "login_with_creds": '{cli} login <account> --url <url> --username U --password P',
+        "agent_run": '{cli} agent-run "<task>" --account <name>',
+        "agent_run_with_url": '{cli} agent-run "<task>" --account <name> --url <url>',
         "ui_open": '{cli} ui open "<url>"',
         "ui_state": "{cli} ui state",
         "ui_click": "{cli} ui click N",

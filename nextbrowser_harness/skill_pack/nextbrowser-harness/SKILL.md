@@ -115,12 +115,46 @@ nextbrowser account add <name> --mlx-profile <existing-uuid>
 
 `--create-mlx` calls Multilogin API to create a new browser profile in your folder and binds it to the account name. Verify the profile appears in the Multilogin X app.
 
+## Use case 3: AI agent-run (fully autonomous)
+
+Give the AI a natural-language task and it drives the browser itself — same system as next-browser.
+
+```bash
+nextbrowser agent-run "Log into Reddit and upvote the top post on r/programming" \
+  --account reddit_main --model gpt-4o
+```
+
+What it does:
+
+1. Connects to the Multilogin profile (same as `login`).
+2. Creates a browser-use `BrowserSession` over CDP.
+3. Injects the full system prompt: reasoning rules, indexed element format, interactive element guidance, captcha/approval prompts.
+4. Runs the browser-use Agent step loop (`take_step()`) — the AI reads screenshots + element indices and outputs actions (`click_element_by_index`, `input_text`, `go_to_url`, `scroll`, `done`, etc.).
+5. Returns JSON: `success`, `steps_taken`, `final_text`, `error`.
+
+Options:
+
+| Flag | Purpose |
+|------|---------|
+| `--account <name>` | Multilogin profile (uses existing session if omitted) |
+| `--url <url>` | Navigate here before starting the task |
+| `--model <name>` | LLM model (default: gpt-4o or `NEXTBROWSER_LLM_MODEL` env) |
+| `--max-steps N` | Step limit (default: 100) |
+| `--captcha` | Enable captcha solving guidance |
+| `--approval` | Enable content approval mode (social posts, emails) |
+
+The agent uses the same prompt architecture as next-browser-main:
+- `[N]<type>text</type>` indexed elements for grounding
+- Screenshot with bounding boxes as ground truth
+- Structured JSON output: `thinking`, `memory`, `next_goal`, `action[]`
+- Platform-specific element patterns (Facebook, LinkedIn, Twitter/X, Reddit)
+
 ## Agent rules (non-negotiable)
 
 1. **`nextbrowser status`** first — read `agent_must_know`.
 2. **Ask user** which account to use; ask for credentials when missing.
-3. **One `login` call**, not separate exec/run per field.
-4. **`nextbrowser ui ...`** for follow-up actions — browser stays open.
+3. **One `login` call** for manual login, or **`agent-run`** for fully autonomous tasks.
+4. **`nextbrowser ui ...`** for follow-up actions after login — browser stays open.
 5. **`nextbrowser ui close`** only when the task is fully done.
 6. **No** `browser-use close`, `multilogin stop-all`, or raw Playwright Python during a task.
 7. Scrape-only? `nextbrowser scrape URL --json` — no account needed.
@@ -131,6 +165,7 @@ nextbrowser account add <name> --mlx-profile <existing-uuid>
 |------|---------|
 | Read agent rules | `nextbrowser status` |
 | First-time login | `nextbrowser login <account> --url <url>` |
+| AI-driven task | `nextbrowser agent-run "<task>" --account <name>` |
 | Re-use session | `nextbrowser ui state` / `click N` / `type N text` |
 | End task | `nextbrowser ui close` |
 | Scrape | `nextbrowser scrape "<url>" --json` |

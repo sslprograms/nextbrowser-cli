@@ -245,6 +245,24 @@ def main(argv: list[str] | None = None) -> int:
     p_ui_raw.add_argument("bu_args", nargs=argparse.REMAINDER)
     ui_sub.add_parser("close", help="Disconnect browser-use and stop MLX profile (end of task)")
 
+    p_agent_run = sub.add_parser(
+        "agent-run",
+        help="Run the AI browser agent over a Multilogin CDP session (browser-use + LLM)",
+    )
+    p_agent_run.add_argument("task", help="Task description for the AI agent")
+    p_agent_run.add_argument(
+        "--account", default=None, help="Multilogin account name (uses existing session if omitted)"
+    )
+    p_agent_run.add_argument("--url", default=None, help="URL to navigate to before starting the task")
+    p_agent_run.add_argument(
+        "--model", default=None,
+        help="LLM model name (default: gpt-4o or NEXTBROWSER_LLM_MODEL env)",
+    )
+    p_agent_run.add_argument("--max-steps", type=int, default=100, help="Max agent steps (default: 100)")
+    p_agent_run.add_argument("--captcha", action="store_true", help="Enable captcha solving guidance")
+    p_agent_run.add_argument("--approval", action="store_true", help="Enable content approval mode")
+    p_agent_run.add_argument("--headless", action="store_true", help="Run MLX browser headless")
+
     p_mlx = sub.add_parser("multilogin", help="Multilogin X API (see Postman docs)")
     mlx_sub = p_mlx.add_subparsers(dest="mlx_cmd", required=True)
     p_mlx_signin = mlx_sub.add_parser("signin", help="Sign in and save tokens")
@@ -624,6 +642,23 @@ def main(argv: list[str] | None = None) -> int:
             out = harness.run_accounts(args.account_id, task, url=args.url)
             print(json.dumps(out, indent=2))
             return 0 if out.get("success") else 1
+
+    if args.command == "agent-run":
+        from nextbrowser_harness.agent.runner import run_agent
+
+        res = run_agent(
+            harness.config,
+            args.task,
+            account_id=args.account,
+            model=args.model,
+            url=args.url,
+            enable_captcha=args.captcha,
+            enable_approval=args.approval,
+            max_steps=args.max_steps,
+            headless=args.headless,
+        )
+        print(json.dumps(res.to_dict(), indent=2))
+        return 0 if res.success else 1
 
     if args.command == "login":
         from nextbrowser_harness.workflows.login import login as login_workflow

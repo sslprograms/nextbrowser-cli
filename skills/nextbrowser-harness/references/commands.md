@@ -11,6 +11,17 @@ Use `platform.cli` from `nextbrowser status` if `nextbrowser` is not on PATH.
 | `nextbrowser scrape "<url>"` | Tiered HTTP fetch (no browser UI) |
 | `nextbrowser tier lookup "<url>"` | Recommended tier + MLX hint |
 
+## AI agent-run (autonomous browser control)
+
+| Command | Purpose |
+|---------|---------|
+| `nextbrowser agent-run "<task>" --account <name>` | Run AI agent over MLX CDP |
+| `nextbrowser agent-run "<task>" --account <name> --url <url>` | Navigate first, then run task |
+| `nextbrowser agent-run "<task>" --model gpt-4o` | Choose LLM model |
+| `nextbrowser agent-run "<task>" --captcha` | Enable captcha solving guidance |
+| `nextbrowser agent-run "<task>" --approval` | Enable content approval (social posts) |
+| `nextbrowser agent-run "<task>" --max-steps 50` | Limit agent steps |
+
 ## Account automation (use case 1)
 
 | Command | Purpose |
