@@ -13,6 +13,7 @@ Agents call this **once** per login. They do not need to chain manually.
 
 from __future__ import annotations
 
+import os
 import re
 import shlex
 import subprocess
@@ -99,15 +100,45 @@ def _bu_call(cdp: str, args: list[str], *, timeout: int = 60) -> subprocess.Comp
 
 
 def _bu_chain(cdp: str, steps: list[list[str]], *, timeout: int = 180) -> subprocess.CompletedProcess:
-    """Run steps as ONE shell chain so daemon keeps the browser open."""
+    """Run steps as ONE shell chain so daemon keeps the browser open.
+    Windows-compatible version to avoid "The filename, directory name, or volume label syntax is incorrect" error.
+    Uses unique session 'reddit-dropship' to avoid 'default' session conflict.
+    """
     bin_path = browser_use_bin()
     if not bin_path:
         raise FileNotFoundError("browser-use CLI not installed")
-    segments = [
-        shlex.join([bin_path, "--cdp-url", cdp, *step]) for step in steps
-    ]
-    script = " && ".join(segments)
-    return subprocess.run(script, shell=True, capture_output=True, text=True, timeout=timeout)
+    session_name = "reddit-dropship"
+    if os.name == "nt":
+        # Windows: build quoted segments and use cmd /c for reliable && chaining with full EXE paths
+        segments = []
+        for step in steps:
+            cmd_parts = [bin_path, "--cdp-url", cdp, "--session", session_name] + step
+            # Quote parts that need it for cmd.exe
+            quoted_parts = []
+            for p in cmd_parts:
+                s = str(p)
+                if " " in s or "&" in s or "(" in s or ")" in s or '"' in s:
+                    quoted_parts.append(f'"{s}"')
+                else:
+                    quoted_parts.append(s)
+            segments.append(" ".join(quoted_parts))
+        script = " && ".join(segments)
+        return subprocess.run(
+            ["cmd", "/c", script],
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            shell=False,
+        )
+    else:
+        # Original POSIX path with session
+        segments = [
+            shlex.join([bin_path, "--cdp-url", cdp, "--session", session_name, *step]) for step in steps
+        ]
+        script = " && ".join(segments)
+        return subprocess.run(
+            script, shell=True, capture_output=True, text=True, timeout=timeout
+        )
 
 
 def login(
