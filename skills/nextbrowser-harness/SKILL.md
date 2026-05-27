@@ -52,7 +52,7 @@ platforms:
 - NEVER tell the user login succeeded unless `logged_in_verified` is true in situation/require-login JSON. `login` success=false means stop.
 - No account yet? Ask user the name, then it is created automatically (Multilogin profile + harness binding).
 - Need credentials and don't have them? Ask the user — never use placeholder USER/PASS.
-- Feed/social tasks (Reddit comments, scroll to post): use `nextbrowser agent-run "<task>" --account <name> --url <url>` — agent can scroll/click/type like next-browser.
+- **AI agent (next-browser + MLX):** `nextbrowser account set-credentials <name> --username U --password P` then `nextbrowser agent-run "<task>" --account <name> --url <url>` — live preflight, `sensitive_data`, auto login when logged out.
 - Between manual steps: `nextbrowser ui situation` then `nextbrowser ui scroll down --pages 1` / `ui state` / `ui click N`.
 - `nextbrowser agent-run` stops Multilogin when finished (default). Use `--keep-open` only if you continue manually; else `nextbrowser ui close`.
 - Read-only HTML: `nextbrowser scrape "<url>" --json` (any tier, no account).
@@ -69,7 +69,8 @@ platforms:
 | Check live tab/situation (with gates) | `nextbrowser ui situation` |
 | Prove submitted text on page (any action) | `nextbrowser ui verify --text "<exact text>"` **(exit 0 required)** |
 | First-time / manual login | `nextbrowser login <account> --url <url>` |
-| Autonomous Reddit/social task | `nextbrowser agent-run "<task>" --account <name> --url <url>` |
+| Store site login for agent | `nextbrowser account set-credentials <name> --username U --password P` |
+| AI agent task (any site) | `nextbrowser agent-run "<task>" --account <name> --url <url>` |
 | Follow-up mechanical UI | `nextbrowser ui state` / `ui click N` / `ui type N "text"` / `ui scroll down --pages 1` / `ui situation` |
 | End session | `nextbrowser ui close` |
 | Scrape | `nextbrowser scrape "<url>" --json` |

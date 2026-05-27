@@ -151,6 +151,18 @@ def main(argv: list[str] | None = None) -> int:
     p_acct_run.add_argument("--url", default=None)
     p_acct_run.add_argument("--js", default=None, help="Shorthand: eval:<javascript>")
     p_acct_run.add_argument("--json", action="store_true", default=True)
+    p_acct_creds = acct_sub.add_parser(
+        "set-credentials",
+        help="Store username/password for agent-run sensitive_data (local file, chmod 600)",
+    )
+    p_acct_creds.add_argument("account_id")
+    p_acct_creds.add_argument("--username", required=True)
+    p_acct_creds.add_argument("--password", required=True)
+    p_acct_creds.add_argument(
+        "--service",
+        default="",
+        help="Optional domain key for browser-use sensitive_data (default: derived from account site/url)",
+    )
 
     p_bu = sub.add_parser(
         "browser-use",
@@ -289,7 +301,14 @@ def main(argv: list[str] | None = None) -> int:
     p_agent_run.add_argument(
         "--account", default=None, help="Multilogin account name (uses existing session if omitted)"
     )
-    p_agent_run.add_argument("--url", default=None, help="URL to navigate to before starting the task")
+    p_agent_run.add_argument("--url", default=None, help="URL to open before task (preflight + navigation)")
+    p_agent_run.add_argument(
+        "--login-url",
+        default=None,
+        help="Login page URL if different from --url (used when not logged in)",
+    )
+    p_agent_run.add_argument("--username", default=None, help="Site username (also saved for account)")
+    p_agent_run.add_argument("--password", default=None, help="Site password (also saved for account)")
     p_agent_run.add_argument(
         "--model", default=None,
         help="LLM model name (default: gpt-4o or NEXTBROWSER_LLM_MODEL env)",
@@ -683,6 +702,31 @@ def main(argv: list[str] | None = None) -> int:
             out = harness.run_accounts(args.account_id, task, url=args.url)
             print(json.dumps(out, indent=2))
             return 0 if out.get("success") else 1
+        if args.acct_cmd == "set-credentials":
+            from nextbrowser_harness.accounts.credentials import save_account_credentials
+
+            try:
+                creds = save_account_credentials(
+                    harness.config,
+                    args.account_id,
+                    username=args.username,
+                    password=args.password,
+                    service=args.service,
+                )
+            except ValueError as e:
+                print(json.dumps({"success": False, "error": str(e)}, indent=2))
+                return 1
+            print(
+                json.dumps(
+                    {
+                        "success": True,
+                        "account_id": creds.account_id,
+                        "message": "Credentials saved for agent-run sensitive_data.",
+                    },
+                    indent=2,
+                )
+            )
+            return 0
 
     if args.command == "agent-run":
         from nextbrowser_harness.agent.runner import run_agent
@@ -693,6 +737,9 @@ def main(argv: list[str] | None = None) -> int:
             account_id=args.account,
             model=args.model,
             url=args.url,
+            login_url=args.login_url,
+            username=args.username,
+            password=args.password,
             enable_captcha=args.captcha,
             enable_approval=args.approval,
             max_steps=args.max_steps,

@@ -24,11 +24,19 @@ import time
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
+from nextbrowser_harness.accounts.credentials import (
+    AccountCredentials,
+    build_sensitive_data,
+    load_account_credentials,
+)
 from nextbrowser_harness.accounts.registry import AccountRegistry, Tier3AccountError
 from nextbrowser_harness.config import HarnessConfig
 from nextbrowser_harness.integrations.browser_use.bridge import connect_account, load_session
 
+from .preflight import probe_login_state
 from .prompts.account_context import account_context_prompt
+from .prompts.browser_agent_extended import BROWSER_AGENT_EXTENDED_PROMPT
+from .prompts.login_required import CREDENTIALS_LOGIN_POLICY, login_required_task_block
 from .prompts.captcha import CAPTCHA_PROMPT
 from .prompts.interactive_elements import INTERACTIVE_ELEMENTS_GUIDANCE
 from .prompts.system_prompt import SYSTEM_PROMPT
@@ -56,6 +64,9 @@ class AgentRunResult:
     done_called: bool = False
     error: str | None = None
     agent_prompt: str = ""
+    logged_in_live: bool | None = None
+    had_credentials: bool = False
+    preflight: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -95,9 +106,13 @@ def _build_system_prompt(
     enable_approval: bool = False,
     task: str = "",
     url: str = "",
+    *,
+    has_credentials: bool = False,
+    logged_in_live: bool | None = None,
+    require_login: bool = False,
 ) -> tuple[str, str]:
     """Return (override_system_message, extend_system_message)."""
-    extensions = [INTERACTIVE_ELEMENTS_GUIDANCE, TAB_GUIDANCE]
+    extensions = [BROWSER_AGENT_EXTENDED_PROMPT, INTERACTIVE_ELEMENTS_GUIDANCE, TAB_GUIDANCE]
 
     if _needs_reddit_guidance(task=task, url=url, site=site):
         from .prompts.reddit import REDDIT_GUIDANCE
@@ -107,9 +122,17 @@ def _build_system_prompt(
     if account_id:
         extensions.append(
             account_context_prompt(
-                account_id, site=site, logged_in=logged_in, display_name=display_name
+                account_id,
+                site=site,
+                logged_in=logged_in,
+                display_name=display_name,
+                has_credentials=has_credentials,
+                logged_in_live=logged_in_live,
             )
         )
+
+    if has_credentials and require_login:
+        extensions.append(CREDENTIALS_LOGIN_POLICY)
 
     if enable_captcha:
         extensions.append(CAPTCHA_PROMPT)
@@ -131,6 +154,44 @@ If uncertain, explicitly say uncertain.
     )
 
     return SYSTEM_PROMPT, "\n".join(extensions)
+
+
+def _resolve_credentials(
+    config: HarnessConfig,
+    account_id: str,
+    *,
+    username: str | None = None,
+    password: str | None = None,
+) -> AccountCredentials | None:
+    if username and password:
+        from nextbrowser_harness.accounts.credentials import is_real_credential, save_account_credentials
+
+        if is_real_credential(username) and is_real_credential(password):
+            return save_account_credentials(
+                config, account_id, username=username, password=password
+            )
+    return load_account_credentials(config, account_id)
+
+
+def _build_task_with_login(
+    task: str,
+    *,
+    url: str = "",
+    login_url: str = "",
+    site: str = "",
+    logged_in_live: bool | None,
+    has_credentials: bool,
+) -> str:
+    parts: list[str] = []
+    nav = url or login_url
+    if nav and "navigate to" not in task.lower()[:200]:
+        parts.append(f"If not already on the right page, go to {nav}.")
+    if has_credentials and logged_in_live is not True:
+        parts.append(
+            login_required_task_block(login_url=login_url or url, site=site)
+        )
+    parts.append(task.strip())
+    return "\n\n".join(parts)
 
 
 def _collect_executed_actions(history: Any) -> list[str]:
@@ -300,6 +361,9 @@ async def _run_agent_async(
     max_steps: int = MAX_STEPS,
     downloads_dir: str | None = None,
     url: str = "",
+    sensitive_data: dict[str, dict[str, str]] | None = None,
+    logged_in_live: bool | None = None,
+    require_login: bool = False,
 ) -> AgentRunResult:
     """Core async agent loop — connects to CDP and runs browser-use Agent."""
     from browser_use import Agent, BrowserProfile, BrowserSession
@@ -313,6 +377,9 @@ async def _run_agent_async(
         enable_approval=enable_approval,
         task=task,
         url=url,
+        has_credentials=bool(sensitive_data),
+        logged_in_live=logged_in_live,
+        require_login=require_login,
     )
 
     dl_dir = downloads_dir or os.path.join(
@@ -331,16 +398,20 @@ async def _run_agent_async(
 
     llm = _get_llm(model_name)
 
-    agent = Agent(
-        task=task,
-        llm=llm,
-        browser_session=browser_session,
-        override_system_message=override_prompt,
-        extend_system_message=extend_prompt,
-        max_failures=MAX_FAILURES,
-        max_history_items=100,
-        llm_timeout=LLM_TIMEOUT,
-    )
+    agent_kwargs: dict[str, Any] = {
+        "task": task,
+        "llm": llm,
+        "browser_session": browser_session,
+        "override_system_message": override_prompt,
+        "extend_system_message": extend_prompt,
+        "max_failures": MAX_FAILURES,
+        "max_history_items": 100,
+        "llm_timeout": LLM_TIMEOUT,
+    }
+    if sensitive_data:
+        agent_kwargs["sensitive_data"] = sensitive_data
+
+    agent = Agent(**agent_kwargs)
 
     result = AgentRunResult(
         success=False,
@@ -388,11 +459,15 @@ def run_agent(
     account_id: str | None = None,
     model: str | None = None,
     url: str | None = None,
+    login_url: str | None = None,
+    username: str | None = None,
+    password: str | None = None,
     enable_captcha: bool = False,
     enable_approval: bool = False,
     max_steps: int = MAX_STEPS,
     headless: bool = False,
     keep_open: bool = False,
+    skip_preflight: bool = False,
 ) -> AgentRunResult:
     """
     Synchronous entry point — start MLX profile, connect CDP, run the AI agent.
@@ -447,14 +522,68 @@ def run_agent(
             )
 
     nav_url = url or ""
-    if url:
-        task = f"First navigate to {url}, then: {task}"
+    login_target = login_url or url or ""
+    creds: AccountCredentials | None = None
+    sensitive_data: dict[str, dict[str, str]] | None = None
+    logged_in_live: bool | None = None
+    preflight_dict: dict[str, Any] = {}
+
+    if account_id:
+        creds = _resolve_credentials(
+            config, account_id, username=username, password=password
+        )
+        if creds:
+            sensitive_data = build_sensitive_data(
+                creds, url=nav_url or login_target, site=site
+            )
+
+        if not skip_preflight and cdp_url:
+            pf = probe_login_state(
+                cdp_url,
+                account_id,
+                open_url=nav_url or login_target or None,
+                timeout=120,
+            )
+            preflight_dict = pf.to_dict()
+            logged_in_live = pf.logged_in_likely
+            if pf.logged_in_likely is True:
+                AccountRegistry(config).mark_logged_in(account_id, logged_in=True)
+            elif pf.logged_in_likely is False:
+                AccountRegistry(config).mark_logged_in(account_id, logged_in=False)
+
+    require_login = bool(sensitive_data) and logged_in_live is not True
+
+    if not sensitive_data and logged_in_live is False:
+        return AgentRunResult(
+            success=False,
+            account_id=account_id or "",
+            task=task,
+            cdp_url=cdp_url,
+            logged_in_live=False,
+            preflight=preflight_dict,
+            error="Not logged in and no credentials available for the agent.",
+            agent_prompt=(
+                f"Store credentials: nextbrowser account set-credentials {account_id} "
+                "--username U --password P\n"
+                "Or pass --username/--password on agent-run.\n"
+                "Or run: nextbrowser login <account> --url <url> with indices, then retry."
+            ),
+        )
+
+    agent_task = _build_task_with_login(
+        task,
+        url=nav_url,
+        login_url=login_target,
+        site=site,
+        logged_in_live=logged_in_live,
+        has_credentials=bool(sensitive_data),
+    )
 
     try:
         result = asyncio.run(
             _run_agent_async(
                 cdp_url,
-                task,
+                agent_task,
                 model_name,
                 account_id=account_id or "",
                 site=site,
@@ -464,8 +593,14 @@ def run_agent(
                 enable_approval=enable_approval,
                 max_steps=max_steps,
                 url=nav_url,
+                sensitive_data=sensitive_data,
+                logged_in_live=logged_in_live,
+                require_login=require_login,
             )
         )
+        result.logged_in_live = logged_in_live
+        result.had_credentials = bool(sensitive_data)
+        result.preflight = preflight_dict
     except Exception as e:
         result = AgentRunResult(
             success=False,

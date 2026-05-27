@@ -58,7 +58,7 @@ def test_account_context_prompt_includes_details():
     )
     assert "reddit_main" in prompt
     assert "reddit.com" in prompt
-    assert "already logged in" in prompt
+    assert "logged in" in prompt.lower()
     assert "Multilogin" in prompt
     assert "placeholder" in prompt.lower()
 
@@ -66,6 +66,17 @@ def test_account_context_prompt_includes_details():
 def test_account_context_prompt_not_logged_in():
     prompt = account_context_prompt("alice", logged_in=False)
     assert "NOT logged in" in prompt
+
+
+def test_account_context_with_credentials():
+    prompt = account_context_prompt(
+        "alice",
+        logged_in=False,
+        has_credentials=True,
+        logged_in_live=False,
+    )
+    assert "sensitive_data" in prompt
+    assert "MUST" in prompt
 
 
 def test_build_system_prompt_basic():
@@ -83,7 +94,7 @@ def test_build_system_prompt_with_account():
     )
     assert "bob" in extend
     assert "twitter.com" in extend
-    assert "already logged in" in extend
+    assert "logged in" in extend.lower()
 
 
 def test_build_system_prompt_with_captcha():

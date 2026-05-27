@@ -40,10 +40,11 @@ def test_skill_frontmatter_agentskills():
     assert "windows" in meta.get("platforms", [])
 
 
-def test_skill_teaches_v1_3_workflow():
+def test_skill_teaches_agent_workflow():
     root = bundled_skill_dir()
     body = (root / "SKILL.md").read_text(encoding="utf-8")
-    assert "v1.3" in body
+    assert "agent-run" in body
+    assert "set-credentials" in body
     assert "nextbrowser login" in body
     assert "nextbrowser ui" in body
     assert "ui close" in body

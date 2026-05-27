@@ -14,7 +14,7 @@ Multimodular browser harness. Two use cases:
 1. Load **browser-use** skill + this skill.
 2. Ask user: account name / new login / credentials when missing.
 3. **Manual login**: `nextbrowser login <name> --url <url>` (auto-creates account if needed).
-4. **AI agent task**: `nextbrowser agent-run "<task>" --account <name>` (any site — stops MLX when done unless `--keep-open`).
+4. **AI agent (like next-browser)**: `nextbrowser account set-credentials <name> --username U --password P` then `nextbrowser agent-run "<task>" --account <name> --url <url>` — probes login, injects `sensitive_data`, forces login in task when logged out.
 5. **Proof before claims** (all sites): `nextbrowser ui require-login` (exit 0 = logged in). After any submit: `nextbrowser ui verify --text "<exact text>"` (exit 0 = visible on page). `ui situation` exits 1 when logged out (`--permissive` only for debugging).
 6. **Follow-up actions**: `nextbrowser ui state | click N | type N "text" | scroll down --pages 1`.
 7. **End task**: `nextbrowser ui close`.
