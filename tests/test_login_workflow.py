@@ -58,31 +58,49 @@ def test_login_happy_path_with_indices(tmp_path, monkeypatch):
     AccountRegistry(cfg).register("alice", mlx_profile_id="prof-1", mlx_folder_id="f1")
 
     with patch("nextbrowser_harness.workflows.login.connect_account") as connect_mock, patch(
-        "nextbrowser_harness.workflows.login.bu_chain"
-    ) as chain_mock, patch(
-        "nextbrowser_harness.workflows.login.browser_use_bin", return_value="/usr/bin/browser-use"
-    ):
+        "nextbrowser_harness.workflows.login.mlx_page"
+    ) as mlx_mock, patch(
+        "nextbrowser_harness.workflows.login.capture_state_text"
+    ) as state_mock:
         connect_mock.return_value = {
             "success": True,
             "cdp_url": "http://127.0.0.1:9222",
             "account_id": "alice",
         }
 
-        class FakeProc:
-            returncode = 0
-            stdout = ""
-            stderr = ""
-
         logged_in_state = (
-            "Current URL: https://example.com/home\n[8]<button>Log out</button>"
+            "Current URL: https://example.com/home\n[8] button Log out"
         )
-        login_form_state = (
-            "[1] textbox Username\n[2] textbox Password\n[3] button Log in"
+
+        class FakePage:
+            url = "https://example.com/home"
+
+            def goto(self, *a, **k):
+                pass
+
+            def wait_for_timeout(self, *a, **k):
+                pass
+
+        class FakeDriver:
+            def input_text(self, *a, **k):
+                pass
+
+            def click(self, *a, **k):
+                pass
+
+        from contextlib import contextmanager
+
+        @contextmanager
+        def fake_mlx(*a, **k):
+            yield FakePage()
+
+        mlx_mock.side_effect = fake_mlx
+        state_mock.return_value = logged_in_state
+
+        monkeypatch.setattr(
+            "nextbrowser_harness.element_search.indexed.IndexedElementSearch",
+            lambda page: FakeDriver(),
         )
-        chain_mock.side_effect = [
-            type("P", (), {"returncode": 0, "stdout": login_form_state, "stderr": ""})(),
-            type("P", (), {"returncode": 0, "stdout": logged_in_state, "stderr": ""})(),
-        ]
 
         res = login(
             cfg,

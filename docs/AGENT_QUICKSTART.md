@@ -1,6 +1,6 @@
-# Agent quickstart — OpenClaw, Claude, Cursor, and others
+# Agent quickstart — any AgentSkills host
 
-This guide teaches **you** and **your agent** how to run browser automation (including **injecting JavaScript**) via the Nextbrowser Harness CLI.
+This guide is for **any agent that loads skills** (Cursor, Claude Code, Hermes, OpenClaw, Codex, project `.cursor/skills/`, etc.). Same MLX + CDP workflow everywhere — install the skill on your host, then run `nextbrowser` from the shell.
 
 ---
 
@@ -33,27 +33,28 @@ nextbrowser agent doctor
 
 ---
 
-## 2a. Hermes Agent
+## 2. Install the skill (pick your host)
 
 ```bash
-nextbrowser agent install --host hermes --force
+nextbrowser agent install --host all --force   # every known host
+nextbrowser agent doctor                     # paths + installed?
 ```
 
-Skill path: `~/.hermes/skills/browser-automation/nextbrowser-harness/` (or `%USERPROFILE%\.hermes\...` on Windows).
+Examples:
 
-Set env in `~/.hermes/.env`:
+| Host | Install |
+|------|---------|
+| Cursor | `nextbrowser agent install --host cursor --force` |
+| Claude Code | `nextbrowser agent install --host claude --force` |
+| Hermes | `nextbrowser agent install --host hermes --force` |
+| OpenClaw | `nextbrowser agent install --host openclaw --force` |
+| This repo | `nextbrowser agent install --host project --force` → `./skills/nextbrowser-harness` |
 
-```bash
-export NEXTBROWSER_USE_CASE=scrape
-export NEXTBROWSER_AUTOMATION=playwright
-nextbrowser init --env
-```
-
-Use `/nextbrowser-harness` in chat or: `hermes --skills nextbrowser-harness`.
+Hermes-only notes: skill at `~/.hermes/skills/browser-automation/nextbrowser-harness/`, env in `~/.hermes/.env`, slash `/nextbrowser-harness`.
 
 ---
 
-## 2. Install the skill for OpenClaw
+## 2b. OpenClaw (detail)
 
 ```bash
 nextbrowser agent install --host openclaw --force

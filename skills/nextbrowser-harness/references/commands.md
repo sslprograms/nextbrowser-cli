@@ -11,43 +11,41 @@ Use `platform.cli` from `nextbrowser status` if `nextbrowser` is not on PATH.
 | `nextbrowser scrape "<url>"` | Tiered HTTP fetch (no browser UI) |
 | `nextbrowser tier lookup "<url>"` | Recommended tier + MLX hint |
 
-## AI agent-run (autonomous browser control)
+## MLX connect (start here)
 
 | Command | Purpose |
 |---------|---------|
-| `nextbrowser account set-credentials <name> --username U --password P` | Store credentials for agent-run (local, used as browser-use `sensitive_data`) |
-| `nextbrowser agent-run "<task>" --account <name>` | Run AI agent over MLX CDP |
-| `nextbrowser agent-run "<task>" --account <name> --url <url>` | Preflight open URL, then run task |
-| `nextbrowser agent-run "<task>" --account <name> --url <url> --login-url <login-page>` | Force login page when logged out |
-| `nextbrowser agent-run "<task>" --username U --password P` | Provide creds inline (also saved for account) |
-| `nextbrowser agent-run "<task>" --model gpt-4o` | Choose LLM model |
-| `nextbrowser agent-run "<task>" --captcha` | Enable captcha solving guidance |
-| `nextbrowser agent-run "<task>" --approval` | Enable content approval (social posts) |
-| `nextbrowser agent-run "<task>" --max-steps 50` | Limit agent steps |
-
-## Account automation (use case 1)
-
-| Command | Purpose |
-|---------|---------|
+| `nextbrowser connect --account <name>` | Start MLX profile, save CDP session |
+| `nextbrowser disconnect --account <name>` | Stop profile, clear session |
 | `nextbrowser account list` | Saved accounts (name, MLX UUID, logged_in) |
 | `nextbrowser account add <name> --create-mlx` | New MLX profile + name binding |
 | `nextbrowser account add <name> --mlx-profile <uuid>` | Link existing MLX profile |
-| `nextbrowser account set-credentials <name> --username U --password P` | Store site credentials for agent-run login |
-| `nextbrowser login <name> --url <url>` | One-shot login (open + state + optional credentials) |
-| `nextbrowser login <name> --url <url> --username U --password P --username-index 12 --password-index 15 --submit-index 20` | Chained login |
-| `nextbrowser ui require-login` | Fail-closed: exit 0 only if live page proves logged in |
-| `nextbrowser ui situation` | Live URL, logged-in heuristic + agent_gates (exit 1 when logged out; use `--permissive` only for debugging) |
-| `nextbrowser ui verify --text "<exact text>"` | Proof that submitted text is visible on the page (exit 0 required to claim success) |
-| `nextbrowser ui state` | List clickable elements |
+| `nextbrowser login <name> --url <url>` | One-shot open + state (+ optional credential indices) |
+
+## UI (Playwright over MLX CDP)
+
+| Command | Purpose |
+|---------|---------|
+| `nextbrowser ui state` | Indexed elements (how you see the page) |
 | `nextbrowser ui open <url>` | Navigate |
 | `nextbrowser ui click <N>` | Click by index |
 | `nextbrowser ui type <N> "text"` | Type into element |
-| `nextbrowser ui keys "Enter"` | Send keys |
-| `nextbrowser ui eval "<js>"` | Run JavaScript |
-| `nextbrowser ui screenshot [path]` | Screenshot |
-| `nextbrowser ui chain "open URL" "state" "click 5"` | Multi-step in one shell |
-| `nextbrowser ui run <browser-use args...>` | Raw browser-use passthrough |
-| `nextbrowser ui close` | End task: disconnect + stop MLX |
+| `nextbrowser ui scroll down --pages 1` | Scroll |
+| `nextbrowser ui require-login` | Exit 0 only if logged in (proof) |
+| `nextbrowser ui verify --text "<exact>"` | Exit 0 if text visible (proof) |
+| `nextbrowser ui situation` | URL + logged-in heuristic (exit 1 when logged out) |
+| `nextbrowser ui close` | Same as disconnect |
+
+Aliases: `nextbrowser state`, `click`, `input` when session exists.
+
+## Optional autonomous agent-run
+
+Uses **your** LLM API key from env (`OPENAI_API_KEY`, etc.) — not browser-use cloud.
+
+| Command | Purpose |
+|---------|---------|
+| `nextbrowser account set-credentials <name> --username U --password P` | Local creds for agent-run |
+| `nextbrowser agent-run "<task>" --account <name> --url <url>` | Autonomous task (optional) |
 
 ## Multilogin
 
@@ -55,32 +53,20 @@ Use `platform.cli` from `nextbrowser status` if `nextbrowser` is not on PATH.
 |---------|---------|
 | `nextbrowser multilogin setup-wizard` | Interactive MLX setup |
 | `nextbrowser multilogin doctor` | Launcher + token check |
-| `nextbrowser multilogin folders` | List workspace folders |
-| `nextbrowser multilogin profiles` | Search profiles |
-| `nextbrowser multilogin stop-all` | Emergency stop (use only outside a task) |
+| `nextbrowser multilogin stop-all` | Emergency stop (outside a task only) |
 
-## browser-use bridge
-
-| Command | Purpose |
-|---------|---------|
-| `nextbrowser browser-use connect --account <name>` | Underlying connect (login wraps this) |
-| `nextbrowser browser-use disconnect --account <name>` | Same as `ui close` |
-| `nextbrowser browser-use doctor` | browser-use CLI + saved session |
-| `nextbrowser browser-use install-skill` | Download official browser-use SKILL.md |
-
-## Agent skill install
+## Agent skill install (any AgentSkills host)
 
 ```bash
-nextbrowser agent install --force --with-browser-use
+nextbrowser agent install --host all --force
 nextbrowser agent doctor
 ```
+
+Single host: `--host cursor`, `--host claude`, `--host hermes`, `--host openclaw`, `--host codex`, `--host project`, etc.
 
 ## Environment
 
 | Variable | Purpose |
 |----------|---------|
-| `NEXTBROWSER_USE_CASE` | `scrape` or `accounts` |
-| `NEXTBROWSER_BROWSER` | `native` / `multilogin` |
-| `NEXTBROWSER_DRIVER` | `undetected` (default) / `playwright` |
-| `NEXTBROWSER_PROXY` | `none` / `nodemaven` / `custom` |
-| `MULTILOGIN_FOLDER_ID` | MLX folder UUID (set by setup-wizard) |
+| `MULTILOGIN_FOLDER_ID` | MLX folder UUID (setup-wizard) |
+| `NEXTBROWSER_BROWSER_USE_SESSION` | Override session JSON path |

@@ -10,15 +10,15 @@ from nextbrowser_harness.agent_navigation import (
 
 def test_shim_exposes_must_know():
     assert AGENT_MUST_KNOW
-    assert any("login" in line for line in AGENT_MUST_KNOW)
+    assert any("cdp" in line.lower() for line in AGENT_MUST_KNOW)
 
 
-def test_shim_recipes_include_login_and_ui():
+def test_shim_recipes_include_cdp():
     recipes = agent_command_recipes()
     assert "login" in recipes
-    assert "ui_state" in recipes
-    assert "ui_situation" in recipes
-    assert "ui_close" in recipes
+    assert "cdp_send" in recipes
+    assert "cdp_session" in recipes
+    assert "disconnect" in recipes
 
 
 def test_shim_guide_has_use_cases():
@@ -28,6 +28,5 @@ def test_shim_guide_has_use_cases():
     assert "scrape" in guide["use_cases"]
 
 
-def test_policy_string_mentions_login_and_ui():
-    assert "login" in AGENT_NAVIGATION_POLICY
-    assert "ui" in AGENT_NAVIGATION_POLICY
+def test_policy_string_mentions_cdp():
+    assert "cdp" in AGENT_NAVIGATION_POLICY.lower()

@@ -1,144 +1,105 @@
 """
 Single source of truth for agent guidance — referenced by status JSON, SKILL.md, CLI output.
-
-Maps directly to Nextbrowser Harness MVP v1.3 spec:
-  - Four-layer stack (browser / proxy / automation / captcha)
-  - Two use cases: account automation, tiered scraping
-  - Browser-use is the default automation framework; UI commands run through it.
-
-Edit this file (not the skill copies) to change agent behavior everywhere.
 """
 
 from __future__ import annotations
 
-VERSION = "1.7"
+VERSION = "2.1"
 
 
 MUST_KNOW = [
-    "Use the browser-use skill for UI (state / click / type). nextbrowser handles MLX, accounts, scrape.",
-    "Tier-3 sites (Reddit-class, hard anti-bot) require Multilogin + a named account.",
-    "Login in ONE command: `{cli} login <account> --url <url>` — keeps browser open the whole time.",
-    "To know logged-in vs logged-out, run `{cli} ui require-login` or `{cli} ui situation` — read `agent_gates.logged_in_verified` in JSON; exit 1 means NOT logged in (do not guess).",
-    "NEVER claim content was posted/submitted unless `{cli} ui verify --text \"<exact text>\"` exits 0. Exit 1 = text is NOT on the page.",
-    "NEVER tell the user login succeeded unless `logged_in_verified` is true in situation/require-login JSON. `login` success=false means stop.",
-    "No account yet? Ask user the name, then it is created automatically (Multilogin profile + harness binding).",
-    "Need credentials and don't have them? Ask the user — never use placeholder USER/PASS.",
-    "AI agent (next-browser style): `{cli} account set-credentials <name> --username U --password P` then `{cli} agent-run \"<task>\" --account <name> --url <url>` — agent gets sensitive_data, live preflight, and MUST log in when logged out.",
-    "Mechanical UI (any site): `ui require-login` → steps → `ui verify --text` after submit.",
-    "Between manual steps: `{cli} ui situation` then `{cli} ui scroll down --pages 1` / `ui state` / `ui click N`.",
-    "`{cli} agent-run` stops Multilogin when finished (default). Use `--keep-open` only if you continue manually; else `{cli} ui close`.",
-    "Read-only HTML: `{cli} scrape \"<url>\" --json` (any tier, no account).",
-    "Never: `nextbrowser exec --action state` for UI, raw Playwright Python, or `multilogin stop-all` mid-task.",
+    "Multilogin X exposes Chrome DevTools Protocol (CDP). You control the browser with explicit CDP methods only — no indexed `ui click` shortcuts.",
+    "Start: `{cli} connect --account <name>` → `{cli} cdp session` (CDP URL + active page).",
+    "Act/observe: `{cli} cdp send <Domain.method> --params '<json>'` — e.g. Page.navigate, DOM.getDocument, Input.dispatchMouseEvent, Runtime.evaluate.",
+    "Examples: `{cli} cdp catalog`. Every navigation, click, type, and read must be a CDP send you choose.",
+    "Verify with CDP (e.g. Runtime.evaluate on document text) before claiming login/post success.",
+    "MLX profile = proxy + fingerprint + cookies. No browser-use CLI or API key.",
+    "End: `{cli} disconnect --account <name>`. Never `multilogin stop-all` mid-task.",
+    "Scrape without browser: `{cli} scrape \"<url>\" --json`.",
 ]
 
 
 POLICY = """
-Read `{cli} status` first — `agent_must_know` + `commands` show the canonical workflow.
+Read `{cli} status` first.
+Install skill: `{cli} agent install --host all --force`
 
-Use cases (from MVP spec):
-  1. Account automation — persistent MLX profiles, sticky IPs, multi-account.
-     Login:    {cli} login <name> --url <url>
-     Drive:    {cli} ui open / state / click N / type N text / close
-  2. Scraping — three tiers, auto-escalation.
-     {cli} scrape "<url>" --json
-     {cli} tier lookup "<url>"
-
-UI is always browser-use (CDP). nextbrowser owns Multilogin profile lifecycle so the
-browser stays open between commands — never close the profile until the task is done.
+MLX + raw CDP (no shortcuts):
+  Start:  {cli} connect --account <name>
+  Orient: {cli} cdp session
+  Loop:   {cli} cdp send <Method> --params '{{...}}'
+  Proof:  cdp send Runtime.evaluate / DOM.* — confirm in JSON result before claiming success
+  End:    {cli} disconnect --account <name>
 """.strip()
 
 
 def automation_guide() -> dict:
-    """Structured guide returned in `status` JSON. {cli} placeholder replaced by harness."""
     return {
         "version": VERSION,
         "stack": {
-            "browser": ["native", "multilogin", "gologin", "octo"],
-            "proxy": ["nodemaven", "custom", "none"],
-            "automation": ["browser_use", "playwright"],
-            "captcha": "optional (off by default)",
+            "browser": "multilogin",
+            "proxy": "mlx profile (configured in Multilogin app)",
+            "automation": "cdp_raw",
+            "captcha": "optional",
         },
         "use_cases": {
             "accounts": {
-                "login": "{cli} login <account> --url <url>",
-                "ui": "{cli} ui state | click N | type N \"text\" | close",
-                "list": "{cli} account list",
-                "add": "{cli} account add <name> --create-mlx",
+                "connect": "{cli} connect --account <name>",
+                "cdp": "{cli} cdp send <Domain.method> --params '<json>'",
+                "disconnect": "{cli} disconnect --account <name>",
             },
             "scrape": {
                 "fetch": '{cli} scrape "<url>" --json',
-                "tier_lookup": '{cli} tier lookup "<url>"',
-                "tiers": {
-                    "1": "HTTP only — APIs, static HTML",
-                    "2": "Headless browser — most modern sites",
-                    "3": "Headful + Multilogin + residential proxy — hard anti-bot",
-                },
             },
         },
         "must_know": MUST_KNOW,
         "ask_user_before": [
-            "Which account to use (or whether to add a new login)",
-            "Username / password if credentials missing",
+            "Which MLX account to use",
+            "Site username / password if login needed",
         ],
         "never": [
-            "nextbrowser exec --action state/click for UI (use {cli} ui or browser-use)",
-            "Separate exec/run per field during login (use one `login` command)",
-            "browser-use close / multilogin stop-all before the task is done",
-            "Raw Playwright Python for browser control",
-            "Editing ~/.nextbrowser/multilogin_tokens.yaml by hand",
-            "Claiming 'posted', 'submitted', 'verified', or 'logged in' without require-login + verify exit 0",
-            "Ignoring CLI exit code 1 from ui situation / require-login / verify",
+            "Using ui click/type indices instead of CDP when automating accounts",
+            "browser-use CLI as a required dependency",
+            "Claiming success without CDP proof in command output",
+            "multilogin stop-all mid-task",
         ],
     }
 
 
 def command_recipes() -> dict:
-    """Flat command templates. {cli} is replaced at runtime."""
     return {
         "policy": POLICY,
         "agent_must_know": MUST_KNOW,
         "automation": automation_guide(),
+        "connect": "{cli} connect --account <name>",
+        "cdp_session": "{cli} cdp session",
+        "cdp_send": "{cli} cdp send <Domain.method> --params '<json>'",
+        "cdp_catalog": "{cli} cdp catalog",
+        "disconnect": "{cli} disconnect --account <name>",
         "login": "{cli} login <account> --url <url>",
-        "login_with_creds": '{cli} login <account> --url <url> --username U --password P',
-        "account_set_credentials": "{cli} account set-credentials <name> --username U --password P",
-        "agent_run": '{cli} agent-run "<task>" --account <name>',
-        "agent_run_with_url": '{cli} agent-run "<task>" --account <name> --url <url>',
-        "agent_run_with_login": '{cli} agent-run "<task>" --account <name> --url <url> --login-url <login-page>',
-        "ui_open": '{cli} ui open "<url>"',
-        "ui_situation": "{cli} ui situation",
-        "ui_require_login": "{cli} ui require-login",
-        "ui_verify_text": '{cli} ui verify --text "<exact submitted text>"',
-        "ui_state": "{cli} ui state",
-        "ui_click": "{cli} ui click N",
-        "ui_scroll": "{cli} ui scroll down --pages 1",
-        "ui_type": '{cli} ui type N "text"',
-        "ui_close": "{cli} ui close",
-        "agent_run_keep_open": '{cli} agent-run "<task>" --account <name> --keep-open',
         "scrape": '{cli} scrape "<url>" --json',
-        "tier_lookup": '{cli} tier lookup "<url>"',
-        "account_list": "{cli} account list",
-        "account_add": "{cli} account add <name> --create-mlx",
-        "mlx_setup": "{cli} multilogin setup-wizard",
         "mlx_doctor": "{cli} multilogin doctor",
-        "install_skill": "{cli} agent install --force --with-browser-use",
+        "agent_install": "{cli} agent install --host all --force",
+        "agent_doctor": "{cli} agent doctor",
     }
 
 
 def render(cli_prefix: str) -> dict:
-    """Replace {cli} placeholders in must_know + recipes for status JSON."""
+    guide = automation_guide()
+    recipes = command_recipes()
 
-    def sub(value):
-        if isinstance(value, str):
-            return value.replace("{cli}", cli_prefix)
-        if isinstance(value, list):
-            return [sub(v) for v in value]
-        if isinstance(value, dict):
-            return {k: sub(v) for k, v in value.items()}
-        return value
+    def sub(obj):
+        if isinstance(obj, str):
+            return obj.replace("{cli}", cli_prefix)
+        if isinstance(obj, list):
+            return [sub(x) for x in obj]
+        if isinstance(obj, dict):
+            return {k: sub(v) for k, v in obj.items()}
+        return obj
 
     return {
-        "must_know": [line.replace("{cli}", cli_prefix) for line in MUST_KNOW],
-        "policy": POLICY.replace("{cli}", cli_prefix),
-        "guide": sub(automation_guide()),
-        "commands": sub(command_recipes()),
+        "version": VERSION,
+        "spec": "Nextbrowser Harness MVP — MLX raw CDP",
+        "agent_must_know": sub(MUST_KNOW),
+        "commands": sub(recipes),
+        "automation": sub(guide),
     }

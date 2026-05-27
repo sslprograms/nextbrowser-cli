@@ -61,5 +61,6 @@ def test_connect_account_mock(tmp_path, monkeypatch):
     out = connect_account(cfg, "alice")
     assert out["success"]
     assert out["cdp_url"] == "http://127.0.0.1:9222"
-    assert "browser-use --cdp-url" in out["browser_use_prefix"]
+    assert out.get("engine") == "mlx+playwright"
+    assert "cdp send" in " ".join(out.get("next_commands", []))
     assert load_session()["account_id"] == "alice"

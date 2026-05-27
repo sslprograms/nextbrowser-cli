@@ -28,7 +28,7 @@ def test_bundled_skill_layout():
     assert root.name == "nextbrowser-harness"
     assert (root / "SKILL.md").is_file()
     assert (root / "references" / "commands.md").is_file()
-    assert (root / "references" / "browser-use-bridge.md").is_file()
+    assert (root / "references" / "cdp-agent.md").is_file()
 
 
 def test_skill_frontmatter_agentskills():
@@ -43,21 +43,24 @@ def test_skill_frontmatter_agentskills():
 def test_skill_teaches_agent_workflow():
     root = bundled_skill_dir()
     body = (root / "SKILL.md").read_text(encoding="utf-8")
-    assert "agent-run" in body
-    assert "set-credentials" in body
-    assert "nextbrowser login" in body
-    assert "nextbrowser ui" in body
-    assert "ui close" in body
-    assert "agent_must_know" in body
+    assert "agent install" in body
+    assert "connect --account" in body
+    assert (root / "references" / "agent-host-drives-browser.md").is_file()
+    assert "cdp send" in body
+    assert "no browser-use" in body.lower() or "shortcut" in body.lower()
+    assert "connect --account" in body
+    assert "nextbrowser connect" in body
+    assert "disconnect" in body
+    assert "ui close" in body or "disconnect" in body
+    assert "status" in body.lower()
     assert "Multilogin" in body and "CDP" in body
-    assert "nextbrowser ui situation" in body
-    assert "tier" in body.lower()
+    assert "cdp session" in body
     assert (root / "references" / "browser-use-bridge.md").is_file()
     assert (root / "references" / "troubleshooting.md").is_file()
 
 
 def test_skill_no_secret_env_prompts():
-    """Hermes treats required_environment_variables as hidden secrets — only use for API keys."""
+    """Hosts treat required_environment_variables as hidden secrets — only use for API keys."""
     meta = load_skill_frontmatter()
     assert "required_environment_variables" not in meta
 

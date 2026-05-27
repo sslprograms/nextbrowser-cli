@@ -11,12 +11,12 @@ Multimodular browser harness. Two use cases:
 
 ## Rules
 
-1. Load **browser-use** skill + this skill.
+1. **MLX + raw CDP** — no browser-use, no indexed shortcuts. `nextbrowser connect --account <name>` → `nextbrowser cdp send <Domain.method> --params '<json>'`. See `references/cdp-agent.md`.
 2. Ask user: account name / new login / credentials when missing.
 3. **Manual login**: `nextbrowser login <name> --url <url>` (auto-creates account if needed).
-4. **AI agent (like next-browser)**: `nextbrowser account set-credentials <name> --username U --password P` then `nextbrowser agent-run "<task>" --account <name> --url <url>` — probes login, injects `sensitive_data`, forces login in task when logged out.
-5. **Proof before claims** (all sites): `nextbrowser ui require-login` (exit 0 = logged in). After any submit: `nextbrowser ui verify --text "<exact text>"` (exit 0 = visible on page). `ui situation` exits 1 when logged out (`--permissive` only for debugging).
-6. **Follow-up actions**: `nextbrowser ui state | click N | type N "text" | scroll down --pages 1`.
+4. **You are the agent** — every observe/act = `cdp send` (Page, DOM, Input, Runtime, …). Prove with CDP reads before claiming success.
+5. **Proof before claims**: e.g. `cdp send Runtime.evaluate` with an expression that checks visible text / URL. Exit 0 on `cdp send` only means the CDP call succeeded — you must interpret the JSON result.
+6. **Legacy** `ui state` / `ui click` exist but do not use them for account automation.
 7. **End task**: `nextbrowser ui close`.
 8. **Scrape only**: `nextbrowser scrape "<url>" --json`.
 
@@ -24,9 +24,9 @@ Multimodular browser harness. Two use cases:
 
 - `nextbrowser exec --action state/click` for UI (deprecated path).
 - Separate `exec`/`run` per login field — use `login`.
-- `browser-use close` / `multilogin stop-all` before `ui close`.
+- `multilogin stop-all` before `ui close` / `disconnect`.
 - Raw Playwright Python for navigation.
 - Placeholder credentials.
 - Telling the user you logged in or posted when `require-login` / `verify` failed or was skipped.
 
-Skill: `skills/nextbrowser-harness/SKILL.md` — see `references/anti-hallucination.md`
+Skill: `skills/nextbrowser-harness/SKILL.md` — install for any host: `nextbrowser agent install --host all --force`. See `references/anti-hallucination.md`

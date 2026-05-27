@@ -115,17 +115,14 @@ def connect_account(
     if not cdp:
         raise MultiloginXError(f"No CDP port from MLX for profile {mlx_profile_id}")
 
-    bu = browser_use_bin()
-    prefix = f'browser-use --cdp-url "{cdp}"'
     session = {
         "account_id": account_id,
         "mlx_profile_id": mlx_profile_id,
         "folder_id": folder_id,
         "cdp_url": cdp,
-        "browser_use_prefix": prefix,
-        "browser_use_bin": bu,
+        "engine": "mlx+playwright",
+        "keep_alive": True,
     }
-    session["keep_alive"] = True
     save_session(session)
 
     from nextbrowser_harness.integrations.multilogin.session import mark_keep_alive
@@ -135,7 +132,7 @@ def connect_account(
         mlx_profile_id=mlx_profile_id,
         folder_id=folder_id,
         cdp_url=cdp,
-        reason="browser-use",
+        reason="mlx",
     )
     AccountRegistry(config).touch_run(account_id)
 
@@ -146,24 +143,24 @@ def connect_account(
         "cdp_url": cdp,
         "connection": "cdp",
         "keep_alive": True,
-        "browser_use_prefix": prefix,
-        "browser_use_bin": bu,
+        "engine": "mlx+playwright",
         "next_commands": [
-            f'{prefix} open "<url>" && {prefix} state && {prefix} input N "text" && {prefix} click N',
-            'nextbrowser browser-use chain open "<url>" state "input 3 user" "click 5"',
+            "nextbrowser cdp session",
+            'nextbrowser cdp send Page.navigate --params \'{"url":"https://..."}\'',
+            "nextbrowser cdp send DOM.getDocument --params '{\"depth\":-1,\"pierce\":true}'",
+            "nextbrowser cdp send Runtime.evaluate --params '{\"expression\":\"document.title\",\"returnByValue\":true}'",
+            f"nextbrowser disconnect --account {account_id}",
         ],
         "agent_must_know": [
-            "MLX browser is open for this session until you disconnect or a task finishes.",
-            "Login chains: one browser-use chain — do not split per field.",
-            "When done with manual steps: nextbrowser ui close (stops Multilogin).",
-            "Autonomous tasks: nextbrowser agent-run stops Multilogin when done (default).",
-            f"Emergency stop all profiles: nextbrowser multilogin stop-all",
+            f"MLX profile is on CDP {cdp}. Control ONLY via `nextbrowser cdp send <Domain.method>`.",
+            "No indexed ui shortcuts — agent issues raw CDP (Page, DOM, Input, Runtime, Network, …).",
+            "No browser-use CLI or API key. Proxy/fingerprint from MLX profile.",
+            f"End: nextbrowser disconnect --account {account_id}",
         ],
         "agent_prompt": (
-            f"MLX profile '{account_id}' is running (keep_alive). "
-            f"Login in ONE chain: `nextbrowser browser-use chain open \"<url>\" state \"input N user\" \"click M\"`. "
-            "Do NOT split into separate exec/run steps. Do NOT browser-use close until done. "
-            f"Then: `nextbrowser browser-use disconnect --account {account_id}`"
+            f"MLX CDP ready ({cdp}). "
+            "Use `nextbrowser cdp session` then `cdp send` for every action and observation. "
+            f"Done: `nextbrowser disconnect --account {account_id}`"
         ),
     }
 

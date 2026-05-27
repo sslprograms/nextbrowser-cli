@@ -25,9 +25,21 @@ from nextbrowser_harness.platform_paths import (
 
 
 def main(argv: list[str] | None = None) -> int:
+    argv = list(argv if argv is not None else sys.argv[1:])
+
+    # Native browser-use control over MLX CDP (connect | mcp | state | click | …)
+    from nextbrowser_harness.config import HarnessConfig, resolve_config_path
+
+    early_cfg = HarnessConfig.load(resolve_config_path())
+    from nextbrowser_harness.integrations.browser_use.agent_cli import try_dispatch_native_browser_use
+
+    native_rc = try_dispatch_native_browser_use(early_cfg, argv)
+    if native_rc is not None:
+        return native_rc
+
     parser = argparse.ArgumentParser(
         prog="nextbrowser",
-        description="Nextbrowser Harness — multimodular browser automation for AI agents",
+        description="Nextbrowser Harness — Multilogin X + raw CDP for AI agents",
     )
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -292,6 +304,16 @@ def main(argv: list[str] | None = None) -> int:
     p_ui_raw = ui_sub.add_parser("run", help="Pass arbitrary args to browser-use")
     p_ui_raw.add_argument("bu_args", nargs=argparse.REMAINDER)
     ui_sub.add_parser("close", help="Disconnect browser-use and stop MLX profile (end of task)")
+
+    p_cdp = sub.add_parser(
+        "cdp",
+        help="Raw Chrome DevTools Protocol over MLX (primary agent control)",
+    )
+    p_cdp.add_argument(
+        "cdp_argv",
+        nargs=argparse.REMAINDER,
+        help="subcommand: session | send <Method> | catalog",
+    )
 
     p_agent_run = sub.add_parser(
         "agent-run",
@@ -748,6 +770,12 @@ def main(argv: list[str] | None = None) -> int:
         )
         print(json.dumps(res.to_dict(), indent=2))
         return 0 if res.success else 1
+
+    if args.command == "cdp":
+        from nextbrowser_harness.workflows import cdp_control
+
+        cdp_argv = [a for a in (args.cdp_argv or []) if a != "--"]
+        return cdp_control.cli_main(harness.config, cdp_argv)
 
     if args.command == "login":
         from nextbrowser_harness.workflows.login import login as login_workflow

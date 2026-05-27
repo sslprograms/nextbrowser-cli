@@ -4,7 +4,7 @@ from pathlib import Path
 
 from nextbrowser_harness.config import HarnessConfig, resolve_config_path
 from nextbrowser_harness.accounts.registry import AccountRegistry
-from nextbrowser_harness.integrations.browser_use.bridge import browser_use_doctor, load_session
+from nextbrowser_harness.integrations.browser_use.bridge import load_session
 from nextbrowser_harness import agent_rules
 from nextbrowser_harness.platform_paths import cli_command_string, platform_status
 from nextbrowser_harness.onboarding import onboard_from_env, onboard_interactive
@@ -69,9 +69,9 @@ class Harness:
         if self.config.browser != "multilogin":
             tier_hint = multilogin_recommendation(self.config, url="https://www.reddit.com")
         return {
-            "agent_must_know": rendered["must_know"],
-            "version": "0.1.3",
-            "spec": "Nextbrowser Harness MVP v1.3",
+            "agent_must_know": rendered["agent_must_know"],
+            "version": agent_rules.VERSION,
+            "spec": rendered["spec"],
             "config": str(resolve_config_path()),
             "stack": {
                 "use_case": self.config.use_case,
@@ -87,14 +87,14 @@ class Harness:
                 "tier-3 exec requires a registered Multilogin account."
             ),
             "accounts": AccountRegistry(self.config).agent_summary(),
-            "browser_use": {
-                "primary_ui": True,
-                "doctor": browser_use_doctor(),
+            "mlx_cdp": {
+                "engine": "cdp_raw",
                 "session": load_session(),
-                "install_skill": f"{cli} browser-use install-skill",
+                "doctor": f"{cli} multilogin doctor",
+                "primary_control": f"{cli} cdp send <Domain.method> --params '<json>'",
             },
             "commands": rendered["commands"],
-            "how_to_automate": rendered["guide"],
+            "how_to_automate": rendered["automation"],
             "multilogin_recommendation": tier_hint,
             "platform": platform_status(),
         }

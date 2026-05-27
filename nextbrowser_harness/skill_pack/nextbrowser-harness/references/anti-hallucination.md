@@ -1,27 +1,25 @@
-# Anti-hallucination (all sites, all authenticated tasks)
+# Anti-hallucination (raw CDP)
 
-External agents must not narrate success from memory. The harness enforces proof via **CLI exit codes** on every site (eBay, Reddit, LinkedIn, SaaS dashboards, etc.).
+Prove outcomes from **CDP command output**, not memory.
 
-## Login (any URL)
+## Before claiming login
 
-1. `nextbrowser login <account> --url <target-site>` (+ creds + indices from `ui state` if known)
-2. Read JSON: `logged_in` and `success`. If `success` is **false**, you are **not** done — stop.
-3. `nextbrowser ui require-login` — **exit 0 only** means the live page looks logged in.
+```bash
+nextbrowser cdp send Runtime.evaluate --params '{"expression":"document.body.innerText.includes(\"Log out\") || document.querySelector(\"[href*=logout]\") !== null","returnByValue":true}'
+```
 
-## Before any authenticated action (post, comment, checkout, message, form submit)
+Read `result` in JSON. If false, you are not logged in.
 
-1. `nextbrowser ui require-login` → exit 0
-2. Mechanical steps: `ui situation` → `ui state` → `ui click N` / `ui type N "..."` / `ui scroll` as needed
-3. After submit: `nextbrowser ui verify --text "exact substring you submitted"` → **exit 0 only** means that text is visible in the live page snapshot.
+## Before claiming a post/submit
 
-If verify exits **1**, tell the user the action **did not** succeed. Do not say "verified" unless `verify` passed.
+```bash
+nextbrowser cdp send Runtime.evaluate --params '{"expression":"document.body.innerText.includes(\"exact text you submitted\")","returnByValue":true}'
+```
 
-## AI agent-run (next-browser style)
+## Every action
 
-To make the **AI agent** actually log in (instead of stopping at a login wall):
+1. `cdp session` — know URL and targets  
+2. `cdp send` — navigate, read DOM, click, type  
+3. `cdp send` — verify with Runtime.evaluate or DOM  
 
-1. `nextbrowser account set-credentials <account> --username U --password P`
-2. `nextbrowser agent-run "<task>" --account <account> --url <url> --login-url <login-page>`
-
-This injects browser-use `sensitive_data` so the LLM never sees the secret values, but can still complete login.
-
+Do not use legacy `ui click N` for account automation.

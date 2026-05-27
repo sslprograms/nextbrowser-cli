@@ -4,62 +4,46 @@ Same fixes on every agent host.
 
 ## Login closes between steps
 
-- Use `nextbrowser login <name> --url <url>` (one command).
-- For follow-ups use `nextbrowser ui state / click N / type N text`.
-- **Never** `nextbrowser exec --action state` per click — that path is deprecated for UI.
-- **Never** `browser-use close` or `multilogin stop-all` before `nextbrowser ui close`.
+- Use `nextbrowser connect --account <name>` then `nextbrowser ui state` / `click` / `type`.
+- Or one-shot: `nextbrowser login <name> --url <url>`.
+- **Never** `nextbrowser exec --action state` per click — deprecated for UI.
+- **Never** `multilogin stop-all` before `nextbrowser disconnect` or `ui close`.
 
 ## Profile missing in Multilogin app
 
 ```bash
-nextbrowser multilogin doctor          # launcher + token
+nextbrowser multilogin doctor
 nextbrowser account add <name> --create-mlx --display-name "Label"
 ```
 
-JSON shows `mlx_profile_id`. Open the Multilogin X app → same folder → profile must be listed.
-
 ## Missing credentials
 
-If you want the **AI agent** to log in like next-browser, you must store credentials for the account:
+Ask the user for username/password, then:
 
 ```bash
-nextbrowser account set-credentials <account> --username U --password P
+nextbrowser login <name> --url <url> --username U --password P --username-index N --password-index N --submit-index N
 ```
 
-Or pass them inline on a run:
+Or use indices from `ui state` manually with `ui type` / `ui click`.
 
-```bash
-nextbrowser agent-run "<task>" --account <account> --url <url> --username U --password P
-```
-
-`nextbrowser login` fails with `placeholder credentials` if `--username` or `--password` look like placeholders (`USER`, `PASS`, empty, `$VAR`). Ask the user for real values.
-
-If `agent-run` is logged out **and** has no credentials, it will fail fast with exit code 1 (this is intentional — no fake login).
+`login` fails with `placeholder credentials` if values look like `USER`, `PASS`, empty, `$VAR`.
 
 ## No CDP session
 
 `nextbrowser ui <cmd>` returns `No browser session.` →
 
 ```bash
-nextbrowser browser-use session     # check saved session
-nextbrowser login <name> --url <url>
+nextbrowser connect --account <name>
 ```
 
 ## MLX launcher issues
 
 | Symptom | Fix |
 |---------|-----|
-| Launcher not reachable | Start the Multilogin X desktop app, then `multilogin doctor` |
+| Launcher not reachable | Start Multilogin X desktop app, then `multilogin doctor` |
 | Token 401 | `multilogin signin` then `multilogin automation-token` |
 | Linux launcher broken | `multilogin fix-linux-launcher` |
-| Profile already running | `multilogin stop-all`, then `login` again |
-
-## browser-use CLI missing
-
-```bash
-curl -fsSL https://browser-use.com/cli/install.sh | bash
-browser-use doctor
-```
+| Profile already running | `multilogin stop-all`, then `connect` again |
 
 ## Playwright missing
 
@@ -71,8 +55,8 @@ playwright install-deps chromium    # Linux headless
 
 ## Agent wrote raw Playwright
 
-Reload skill — UI is browser-use only.
+Reload skill — use `nextbrowser ui state` / `ui click` / `ui type` only.
 
 ## Sandboxed agent
 
-Python, this package, Playwright, Chromium, and browser-use must all be inside the sandbox.
+Python, this package, Playwright, and Chromium must be inside the sandbox. MLX desktop app must run on the host.
