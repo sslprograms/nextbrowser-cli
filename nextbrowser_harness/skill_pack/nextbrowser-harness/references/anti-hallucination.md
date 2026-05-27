@@ -14,23 +14,14 @@ External agents must not narrate success from memory. The harness enforces proof
 2. Mechanical steps: `ui situation` → `ui state` → `ui click N` / `ui type N "..."` / `ui scroll` as needed
 3. After submit: `nextbrowser ui verify --text "exact substring you submitted"` → **exit 0 only** means that text is visible in the live page snapshot.
 
-If verify exits **1**, tell the user the action **did not** succeed. Do not say "verified with ui situation" unless `verify` passed.
+If verify exits **1**, tell the user the action **did not** succeed. Do not say "verified" unless `verify` passed.
 
-## `ui situation` JSON
+## AI agent-run (next-browser style)
 
-Check `agent_gates` (same fields on every site):
+To make the **AI agent** actually log in (instead of stopping at a login wall):
 
-| Field | Meaning |
-|-------|---------|
-| `logged_in_verified` | `true` only when live state proves login |
-| `safe_to_claim_content_posted` | `false` until `ui verify --text` exits 0 |
+1. `nextbrowser account set-credentials <account> --username U --password P`
+2. `nextbrowser agent-run "<task>" --account <account> --url <url> --login-url <login-page>`
 
-Default: `ui situation` **exits 1** when not logged in. Use `ui situation --permissive` only to inspect a logged-out page.
+This injects browser-use `sensitive_data` so the LLM never sees the secret values, but can still complete login.
 
-## Login inference (universal heuristics)
-
-Uses URL + visible UI text: auth paths (`/login`, `/signin`, …), Log in + Sign up gates, sign-out / account chrome, profile URLs — not hardcoded to one domain.
-
-## Windows
-
-Per-account `--session` and `cmd /c` chaining apply to all `ui` / `login` calls (see `windows-cli-quirks.md`).

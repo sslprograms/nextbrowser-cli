@@ -20,7 +20,21 @@ JSON shows `mlx_profile_id`. Open the Multilogin X app → same folder → profi
 
 ## Missing credentials
 
+If you want the **AI agent** to log in like next-browser, you must store credentials for the account:
+
+```bash
+nextbrowser account set-credentials <account> --username U --password P
+```
+
+Or pass them inline on a run:
+
+```bash
+nextbrowser agent-run "<task>" --account <account> --url <url> --username U --password P
+```
+
 `nextbrowser login` fails with `placeholder credentials` if `--username` or `--password` look like placeholders (`USER`, `PASS`, empty, `$VAR`). Ask the user for real values.
+
+If `agent-run` is logged out **and** has no credentials, it will fail fast with exit code 1 (this is intentional — no fake login).
 
 ## No CDP session
 

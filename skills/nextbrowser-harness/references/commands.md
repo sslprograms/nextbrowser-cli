@@ -15,8 +15,11 @@ Use `platform.cli` from `nextbrowser status` if `nextbrowser` is not on PATH.
 
 | Command | Purpose |
 |---------|---------|
+| `nextbrowser account set-credentials <name> --username U --password P` | Store credentials for agent-run (local, used as browser-use `sensitive_data`) |
 | `nextbrowser agent-run "<task>" --account <name>` | Run AI agent over MLX CDP |
-| `nextbrowser agent-run "<task>" --account <name> --url <url>` | Navigate first, then run task |
+| `nextbrowser agent-run "<task>" --account <name> --url <url>` | Preflight open URL, then run task |
+| `nextbrowser agent-run "<task>" --account <name> --url <url> --login-url <login-page>` | Force login page when logged out |
+| `nextbrowser agent-run "<task>" --username U --password P` | Provide creds inline (also saved for account) |
 | `nextbrowser agent-run "<task>" --model gpt-4o` | Choose LLM model |
 | `nextbrowser agent-run "<task>" --captcha` | Enable captcha solving guidance |
 | `nextbrowser agent-run "<task>" --approval` | Enable content approval (social posts) |
@@ -29,9 +32,12 @@ Use `platform.cli` from `nextbrowser status` if `nextbrowser` is not on PATH.
 | `nextbrowser account list` | Saved accounts (name, MLX UUID, logged_in) |
 | `nextbrowser account add <name> --create-mlx` | New MLX profile + name binding |
 | `nextbrowser account add <name> --mlx-profile <uuid>` | Link existing MLX profile |
+| `nextbrowser account set-credentials <name> --username U --password P` | Store site credentials for agent-run login |
 | `nextbrowser login <name> --url <url>` | One-shot login (open + state + optional credentials) |
 | `nextbrowser login <name> --url <url> --username U --password P --username-index 12 --password-index 15 --submit-index 20` | Chained login |
-| `nextbrowser ui situation` | Live URL, logged-in heuristic, registry vs page hints, element map snippet |
+| `nextbrowser ui require-login` | Fail-closed: exit 0 only if live page proves logged in |
+| `nextbrowser ui situation` | Live URL, logged-in heuristic + agent_gates (exit 1 when logged out; use `--permissive` only for debugging) |
+| `nextbrowser ui verify --text "<exact text>"` | Proof that submitted text is visible on the page (exit 0 required to claim success) |
 | `nextbrowser ui state` | List clickable elements |
 | `nextbrowser ui open <url>` | Navigate |
 | `nextbrowser ui click <N>` | Click by index |
