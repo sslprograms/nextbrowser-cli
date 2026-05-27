@@ -131,6 +131,7 @@ What it does:
 3. Injects the full system prompt: reasoning rules, indexed element format, interactive element guidance, captcha/approval prompts.
 4. Runs the browser-use Agent step loop (`take_step()`) — the AI reads screenshots + element indices and outputs actions (`click_element_by_index`, `input_text`, `go_to_url`, `scroll`, `done`, etc.).
 5. Returns JSON: `success`, `steps_taken`, `final_text`, `error`.
+   Also includes verification fields: `executed_actions` and `audit_trail` (per-step verified status, URL changes, and errors).
 
 Options:
 

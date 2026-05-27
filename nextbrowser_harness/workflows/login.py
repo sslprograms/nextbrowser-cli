@@ -32,6 +32,7 @@ from nextbrowser_harness.integrations.browser_use.bridge import (
     connect_account,
     load_session,
 )
+from nextbrowser_harness.workflows.browser_intel import infer_logged_in_with_reason
 
 
 @dataclass
@@ -43,6 +44,7 @@ class LoginResult:
     url: str = ""
     state: str = ""
     logged_in: bool | None = None
+    logged_in_reason: str = ""
     actions_run: list[str] = field(default_factory=list)
     next_commands: list[str] = field(default_factory=list)
     agent_prompt: str = ""
@@ -181,6 +183,9 @@ def login(
         proc = _bu_chain(cdp, [["open", url], ["state"]], timeout=120)
         result.actions_run.extend(["open", "state"])
         result.state = (proc.stdout or "")[-4000:]
+        explanation, inferred = infer_logged_in_with_reason(result.state)
+        result.logged_in = inferred
+        result.logged_in_reason = explanation
         if proc.returncode != 0:
             result.error = (proc.stderr or "")[-2000:]
             result.agent_prompt = "browser-use failed to open URL — check `browser-use doctor`."
@@ -205,7 +210,17 @@ def login(
             proc = _bu_chain(cdp, steps, timeout=180)
             result.actions_run.extend(["input", "input", "click", "state"])
             result.state = (proc.stdout or "")[-4000:]
-            result.logged_in = proc.returncode == 0 and "login" not in result.state.lower()[:200]
+            if proc.returncode == 0:
+                explanation, inferred = infer_logged_in_with_reason(result.state)
+                result.logged_in = inferred
+                result.logged_in_reason = explanation
+            else:
+                result.logged_in = False
+                result.logged_in_reason = "Submit flow failed (browser-use non-zero exit)."
+            if result.logged_in is True:
+                AccountRegistry(config).mark_logged_in(account.account_id, logged_in=True)
+            elif result.logged_in is False:
+                AccountRegistry(config).mark_logged_in(account.account_id, logged_in=False)
         except subprocess.TimeoutExpired as e:
             result.error = f"login chain timed out: {e}"
             result.logged_in = False
@@ -217,6 +232,7 @@ def login(
 
     # Always tell the agent how to continue without breaking keep-alive
     result.next_commands = [
+        "nextbrowser ui situation   # URL + logged-in estimate from live CDP tab",
         f'nextbrowser ui state',
         f'nextbrowser ui click <N>',
         f'nextbrowser ui type <N> "text"',

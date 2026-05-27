@@ -17,12 +17,14 @@ import subprocess
 from dataclasses import asdict, dataclass
 from typing import Any
 
+from nextbrowser_harness.accounts.registry import AccountRegistry
 from nextbrowser_harness.config import HarnessConfig
 from nextbrowser_harness.integrations.browser_use.bridge import (
     browser_use_bin,
     disconnect_account,
     load_session,
 )
+from nextbrowser_harness.workflows.browser_intel import build_situation_from_state_text
 
 
 @dataclass
@@ -100,6 +102,67 @@ def run(
         account_id=sess.get("account_id", ""),
         error=None if proc.returncode == 0 else f"exit {proc.returncode}",
     )
+
+
+def situation(config: HarnessConfig, *, timeout: int = 60) -> dict[str, Any]:
+    """
+    Snapshot what the MLX-attached browser is actually showing: URL, login estimate,
+    match vs accounts.json `logged_in`, and an element map snippet from browser-use state.
+    """
+    sess = load_session()
+    if not sess or not sess.get("cdp_url"):
+        return {
+            "connected": False,
+            "account_id": "",
+            "current_url": "",
+            "logged_in_likely": None,
+            "logged_in_registry": False,
+            "explanation": "No active CDP session.",
+            "error": (
+                "No browser session. Run `nextbrowser login <account> --url <url>` "
+                "or `nextbrowser browser-use connect --account <name>`."
+            ),
+            "hints": [
+                "After connect/login, Multilogin tab must stay open.",
+            ],
+        }
+    aid = sess.get("account_id", "") or ""
+    reg = AccountRegistry(config).get(aid)
+    logged_r = bool(reg.logged_in) if reg else False
+
+    bin_path = browser_use_bin()
+    if not bin_path:
+        return {
+            "connected": True,
+            "account_id": aid,
+            "cdp_present": True,
+            "logged_in_registry": logged_r,
+            "explanation": "Cannot read live page.",
+            "error": (
+                "browser-use CLI missing. Install from https://browser-use.com/cli/install.sh"
+            ),
+        }
+
+    cdp = sess["cdp_url"]
+    proc = subprocess.run(
+        [bin_path, "--cdp-url", cdp, "state"],
+        capture_output=True,
+        text=True,
+        timeout=timeout,
+    )
+    text = proc.stdout or proc.stderr or ""
+    snap = build_situation_from_state_text(
+        text,
+        account_id=aid,
+        registry_logged_in=logged_r,
+        browser_use_exit_code=proc.returncode,
+    )
+    out = snap.to_dict()
+    if proc.returncode != 0:
+        tail = (proc.stderr or "")[-1200:] or ""
+        out["stderr_tail"] = tail
+    out["mlx_profile_id"] = sess.get("mlx_profile_id", "")
+    return out
 
 
 def close(config: HarnessConfig) -> dict[str, Any]:

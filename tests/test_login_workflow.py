@@ -3,7 +3,7 @@
 from unittest.mock import patch
 
 from nextbrowser_harness.config import HarnessConfig
-from nextbrowser_harness.workflows.login import login
+from nextbrowser_harness.workflows.browser_intel import infer_logged_in_from_state
 
 
 def _cfg(tmp_path):
@@ -89,3 +89,13 @@ def test_login_happy_path_with_indices(tmp_path, monkeypatch):
     assert "click" in res.actions_run
     assert res.next_commands  # tells agent how to continue
     assert "ui" in " ".join(res.next_commands)
+
+
+def test_infer_logged_in_from_state_detects_login_page():
+    state = "Current URL: https://example.com/login\n[1]<button>Sign in</button>"
+    assert infer_logged_in_from_state(state) is False
+
+
+def test_infer_logged_in_from_state_detects_logged_in_ui():
+    state = "Current URL: https://example.com/home\n[8]<button>Log out</button>"
+    assert infer_logged_in_from_state(state) is True

@@ -219,6 +219,10 @@ def main(argv: list[str] | None = None) -> int:
         help="Browser-use UI commands using the active CDP session (state, click N, type N text, close)",
     )
     ui_sub = p_ui.add_subparsers(dest="ui_cmd", required=True)
+    ui_sub.add_parser(
+        "situation",
+        help="Live snapshot: URL, logged-in estimate, registry mismatch hints, element map snippet",
+    )
     ui_sub.add_parser("state", help="List clickable elements with indices")
     p_ui_open = ui_sub.add_parser("open", help="Navigate to URL")
     p_ui_open.add_argument("url")
@@ -683,6 +687,12 @@ def main(argv: list[str] | None = None) -> int:
         from nextbrowser_harness.workflows import ui as ui_workflow
 
         cmd = args.ui_cmd
+        if cmd == "situation":
+            out = ui_workflow.situation(harness.config)
+            print(json.dumps(out, indent=2))
+            if not out.get("connected"):
+                return 1
+            return 0 if out.get("browser_use_ok") else 1
         if cmd == "close":
             out = ui_workflow.close(harness.config)
             print(json.dumps(out, indent=2))

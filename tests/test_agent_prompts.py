@@ -6,7 +6,7 @@ from nextbrowser_harness.agent.prompts.captcha import CAPTCHA_PROMPT
 from nextbrowser_harness.agent.prompts.tabs import TAB_GUIDANCE
 from nextbrowser_harness.agent.prompts.approval import APPROVAL_PROMPT
 from nextbrowser_harness.agent.prompts.account_context import account_context_prompt
-from nextbrowser_harness.agent.runner import _build_system_prompt
+from nextbrowser_harness.agent.runner import _build_audit_trail, _build_system_prompt
 
 
 def test_system_prompt_has_core_sections():
@@ -94,3 +94,48 @@ def test_build_system_prompt_with_captcha():
 def test_build_system_prompt_with_approval():
     _, extend = _build_system_prompt(enable_approval=True)
     assert "should_be_approved" in extend
+
+
+def test_build_system_prompt_has_execution_verification():
+    _, extend = _build_system_prompt()
+    assert "execution_verification" in extend
+    assert "Never state an action as completed" in extend
+
+
+def test_build_audit_trail_marks_verified_steps():
+    class FakeResult:
+        def __init__(self, error=None, extracted_content=""):
+            self.error = error
+            self.extracted_content = extracted_content
+
+    class FakeModelOutput:
+        def __init__(self, action):
+            self.action = action
+
+    class FakeBrowserState:
+        def __init__(self, url):
+            self.url = url
+
+    class FakeStep:
+        def __init__(self, action, url, error=None):
+            self.model_output = FakeModelOutput(action)
+            self.browser_state = FakeBrowserState(url)
+            self.result = [FakeResult(error=error, extracted_content="ok")]
+
+    class FakeHistory:
+        def __init__(self, steps):
+            self.history = steps
+
+    history = FakeHistory(
+        [
+            FakeStep([{"go_to_url": {"url": "https://a.com"}}], "https://a.com"),
+            FakeStep([{"click_element_by_index": {"index": 3}}], "https://a.com/page", error=None),
+            FakeStep([{"input_text": {"index": 1, "text": "x"}}], "https://a.com/page", error="Element not found"),
+        ]
+    )
+    trail = _build_audit_trail(history)
+    assert len(trail) == 3
+    assert trail[0]["verified"] is True
+    assert trail[1]["url_changed"] is True
+    assert trail[2]["verified"] is False
+    assert "Element not found" in trail[2]["error"]

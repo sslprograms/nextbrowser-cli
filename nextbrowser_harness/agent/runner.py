@@ -51,6 +51,9 @@ class AgentRunResult:
     final_text: str = ""
     files: list[str] = field(default_factory=list)
     cdp_url: str = ""
+    executed_actions: list[str] = field(default_factory=list)
+    audit_trail: list[dict[str, Any]] = field(default_factory=list)
+    done_called: bool = False
     error: str | None = None
     agent_prompt: str = ""
 
@@ -104,7 +107,171 @@ def _build_system_prompt(
 
         extensions.append(APPROVAL_PROMPT)
 
+    # Harden against fabricated action reporting.
+    extensions.append(
+        """
+<execution_verification>
+Before claiming any action was completed, verify it from browser state/screenshot and action results.
+Never state an action as completed if it is missing from executed action results.
+If uncertain, explicitly say uncertain.
+</execution_verification>
+""".strip()
+    )
+
     return SYSTEM_PROMPT, "\n".join(extensions)
+
+
+def _collect_executed_actions(history: Any) -> list[str]:
+    """
+    Best-effort extraction of executed action names from browser-use history.
+    Works across browser-use versions by probing common structures.
+    """
+    out: list[str] = []
+    if history is None:
+        return out
+
+    # Newer APIs may expose model_actions()
+    model_actions_fn = getattr(history, "model_actions", None)
+    if callable(model_actions_fn):
+        try:
+            action_steps = model_actions_fn() or []
+            for step in action_steps:
+                if isinstance(step, list):
+                    for a in step:
+                        if isinstance(a, dict):
+                            out.extend([str(k) for k in a.keys()])
+                        else:
+                            out.append(str(a))
+                elif isinstance(step, dict):
+                    out.extend([str(k) for k in step.keys()])
+                else:
+                    out.append(str(step))
+        except Exception:
+            pass
+
+    # Fallback: inspect raw history entries
+    raw_steps = getattr(history, "history", None) or []
+    for step in raw_steps:
+        try:
+            model_output = getattr(step, "model_output", None)
+            actions = getattr(model_output, "action", None)
+            if isinstance(actions, list):
+                for a in actions:
+                    if isinstance(a, dict):
+                        out.extend([str(k) for k in a.keys()])
+                    else:
+                        out.append(str(a))
+        except Exception:
+            continue
+
+    # normalize + dedupe while preserving order
+    seen = set()
+    deduped: list[str] = []
+    for a in out:
+        s = a.strip()
+        if not s or s in seen:
+            continue
+        seen.add(s)
+        deduped.append(s)
+    return deduped
+
+
+def _safe_str(value: Any, max_len: int = 400) -> str:
+    if value is None:
+        return ""
+    text = str(value).strip()
+    if len(text) > max_len:
+        return text[: max_len - 3] + "..."
+    return text
+
+
+def _extract_url_from_step(step: Any) -> str:
+    # Try common browser-use history paths
+    for attr in ("url",):
+        val = getattr(step, attr, None)
+        if val:
+            return _safe_str(val, 1000)
+    browser_state = getattr(step, "browser_state", None)
+    if browser_state is not None:
+        for attr in ("url", "current_url"):
+            val = getattr(browser_state, attr, None)
+            if val:
+                return _safe_str(val, 1000)
+    state = getattr(step, "state", None)
+    if state is not None:
+        for attr in ("url", "current_url"):
+            val = getattr(state, attr, None)
+            if val:
+                return _safe_str(val, 1000)
+    return ""
+
+
+def _extract_actions_from_step(step: Any) -> list[str]:
+    actions: list[str] = []
+    model_output = getattr(step, "model_output", None)
+    action_list = getattr(model_output, "action", None)
+    if isinstance(action_list, list):
+        for a in action_list:
+            if isinstance(a, dict):
+                actions.extend([str(k) for k in a.keys()])
+            else:
+                actions.append(str(a))
+    return actions
+
+
+def _extract_step_error(step: Any) -> str:
+    # action_results may contain errors
+    action_results = getattr(step, "result", None) or getattr(step, "action_results", None)
+    if isinstance(action_results, list):
+        for r in action_results:
+            err = getattr(r, "error", None)
+            if err:
+                return _safe_str(err, 1000)
+    return ""
+
+
+def _extract_step_result_preview(step: Any) -> str:
+    action_results = getattr(step, "result", None) or getattr(step, "action_results", None)
+    if isinstance(action_results, list):
+        chunks: list[str] = []
+        for r in action_results:
+            extracted = getattr(r, "extracted_content", None)
+            if extracted:
+                chunks.append(_safe_str(extracted, 200))
+        if chunks:
+            return " | ".join(chunks[:3])
+    return ""
+
+
+def _build_audit_trail(history: Any) -> list[dict[str, Any]]:
+    """
+    Build a per-step audit trail from raw history.
+    Each row is "verified" only when no per-step error is present.
+    """
+    trail: list[dict[str, Any]] = []
+    if history is None:
+        return trail
+    raw_steps = getattr(history, "history", None) or []
+    prev_url = ""
+    for idx, step in enumerate(raw_steps, start=1):
+        actions = _extract_actions_from_step(step)
+        error = _extract_step_error(step)
+        current_url = _extract_url_from_step(step)
+        url_changed = bool(prev_url and current_url and prev_url != current_url)
+        trail.append(
+            {
+                "step": idx,
+                "planned_actions": actions,
+                "verified": bool(actions) and not bool(error),
+                "error": error,
+                "url": current_url,
+                "url_changed": url_changed,
+                "result_preview": _extract_step_result_preview(step),
+            }
+        )
+        if current_url:
+            prev_url = current_url
+    return trail
 
 
 async def _run_agent_async(
@@ -172,6 +339,21 @@ async def _run_agent_async(
         result.steps_taken = len(history.history) if history else 0
         result.success = history.is_successful() if history else False
         result.final_text = history.final_result() if history else ""
+        result.executed_actions = _collect_executed_actions(history)
+        result.audit_trail = _build_audit_trail(history)
+        result.done_called = bool(result.final_text)
+        # Guardrail: don't claim success without any observed executed actions.
+        if result.success and not result.executed_actions:
+            result.success = False
+            if not result.error:
+                result.error = "No verified executed actions found in run history."
+        # Stronger guardrail: require at least one verified step.
+        if result.success and result.audit_trail and not any(
+            bool(row.get("verified")) for row in result.audit_trail
+        ):
+            result.success = False
+            if not result.error:
+                result.error = "Run has no verified successful steps."
     except Exception as e:
         logger.error(f"Agent run failed: {e}", exc_info=True)
         result.error = str(e)
