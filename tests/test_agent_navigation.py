@@ -17,6 +17,7 @@ def test_shim_recipes_include_login_and_ui():
     recipes = agent_command_recipes()
     assert "login" in recipes
     assert "ui_state" in recipes
+    assert "ui_situation" in recipes
     assert "ui_close" in recipes
 
 

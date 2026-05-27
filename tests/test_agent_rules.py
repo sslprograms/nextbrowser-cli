@@ -7,6 +7,7 @@ def test_must_know_includes_keep_alive_and_login():
     text = " ".join(agent_rules.MUST_KNOW).lower()
     assert "browser-use" in text
     assert "login" in text
+    assert "ui situation" in text
     assert "ui close" in text or "disconnect" in text
     assert "placeholder" in text or "ask the user" in text
 
@@ -18,6 +19,7 @@ def test_render_substitutes_cli_prefix():
     assert "{cli}" not in joined
     commands = rendered["commands"]
     assert "{cli}" not in commands["login"]
+    assert "situation" in commands["ui_situation"].lower()
 
 
 def test_guide_contains_use_cases_and_stack():
