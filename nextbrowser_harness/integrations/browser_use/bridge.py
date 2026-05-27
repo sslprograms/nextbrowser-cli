@@ -201,6 +201,8 @@ def run_browser_use_chain(
     """Run multiple browser-use subcommands in one shell chain (browser stays open)."""
     import shlex
 
+    from nextbrowser_harness.workflows.browser_use_exec import bu_chain
+
     sess = session or load_session()
     if not sess or not sess.get("cdp_url"):
         raise Tier3AccountError(
@@ -212,12 +214,13 @@ def run_browser_use_chain(
     if not bin_path:
         raise FileNotFoundError("browser-use CLI not found")
     cdp = sess["cdp_url"]
-    segments = []
-    for part in parts:
-        tokens = shlex.split(part, posix=(os.name != "nt"))
-        segments.append(shlex.join([bin_path, "--cdp-url", cdp, *tokens]))
-    script = " && ".join(segments)
-    return subprocess.run(script, shell=True)
+    steps = [shlex.split(part, posix=(os.name != "nt")) for part in parts]
+    return bu_chain(
+        bin_path,
+        cdp,
+        steps,
+        account_id=sess.get("account_id"),
+    )
 
 
 def run_browser_use(
@@ -242,9 +245,16 @@ def run_browser_use(
         raise FileNotFoundError(
             "browser-use CLI not found. Install: https://browser-use.com/cli/install.sh"
         )
+    from nextbrowser_harness.workflows.browser_use_exec import bu_call
+
     cdp = sess["cdp_url"]
-    cmd = [bin_path, "--cdp-url", cdp, *args]
-    return subprocess.run(cmd, capture_output=False, text=True)
+    return bu_call(
+        bin_path,
+        cdp,
+        args,
+        account_id=sess.get("account_id"),
+        capture_output=False,
+    )
 
 
 def install_browser_use_skill(dest: Path | None = None) -> Path:

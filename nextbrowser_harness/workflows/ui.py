@@ -24,7 +24,12 @@ from nextbrowser_harness.integrations.browser_use.bridge import (
     disconnect_account,
     load_session,
 )
-from nextbrowser_harness.workflows.browser_intel import build_situation_from_state_text
+from nextbrowser_harness.workflows.browser_intel import (
+    agent_gates,
+    build_situation_from_state_text,
+    text_visible_in_state,
+)
+from nextbrowser_harness.workflows.browser_use_exec import bu_call, bu_chain, capture_state
 
 
 @dataclass
@@ -86,10 +91,11 @@ def run(
         )
     cmd = _resolve_cmd(command)
     cmd_args = list(args or [])
-    proc = subprocess.run(
-        [bin_path, "--cdp-url", cdp, cmd, *cmd_args],
-        capture_output=True,
-        text=True,
+    proc = bu_call(
+        bin_path,
+        cdp,
+        [cmd, *cmd_args],
+        account_id=sess.get("account_id"),
         timeout=timeout,
     )
     return UIResult(
@@ -104,7 +110,12 @@ def run(
     )
 
 
-def situation(config: HarnessConfig, *, timeout: int = 60) -> dict[str, Any]:
+def situation(
+    config: HarnessConfig,
+    *,
+    timeout: int = 60,
+    strict: bool = True,
+) -> dict[str, Any]:
     """
     Snapshot what the MLX-attached browser is actually showing: URL, login estimate,
     match vs accounts.json `logged_in`, and an element map snippet from browser-use state.
@@ -144,25 +155,102 @@ def situation(config: HarnessConfig, *, timeout: int = 60) -> dict[str, Any]:
         }
 
     cdp = sess["cdp_url"]
-    proc = subprocess.run(
-        [bin_path, "--cdp-url", cdp, "state"],
-        capture_output=True,
-        text=True,
-        timeout=timeout,
+    text, rc, stderr_tail = capture_state(
+        bin_path, cdp, account_id=aid, timeout=timeout
     )
-    text = proc.stdout or proc.stderr or ""
     snap = build_situation_from_state_text(
         text,
         account_id=aid,
         registry_logged_in=logged_r,
-        browser_use_exit_code=proc.returncode,
+        browser_use_exit_code=rc,
     )
     out = snap.to_dict()
-    if proc.returncode != 0:
-        tail = (proc.stderr or "")[-1200:] or ""
-        out["stderr_tail"] = tail
+    if rc != 0 and stderr_tail:
+        out["stderr_tail"] = stderr_tail
     out["mlx_profile_id"] = sess.get("mlx_profile_id", "")
+    out["strict"] = strict
+    gates = out.get("agent_gates") or {}
+    out["cli_should_exit_nonzero"] = bool(
+        strict and not gates.get("logged_in_verified")
+    )
     return out
+
+
+def require_login(config: HarnessConfig, *, timeout: int = 60) -> dict[str, Any]:
+    """Fail-closed gate: exit 0 only when live page proves logged in."""
+    out = situation(config, timeout=timeout, strict=True)
+    gates = out.get("agent_gates") or agent_gates(
+        logged_in_likely=out.get("logged_in_likely"),
+        browser_use_ok=out.get("browser_use_ok", False),
+        site=out.get("current_url", ""),
+    )
+    verified = gates.get("logged_in_verified", False)
+    out["require_login_ok"] = verified
+    if not verified:
+        out["error"] = out.get("error") or (
+            "NOT LOGGED IN — do not post comments or tell the user login succeeded. "
+            f"{gates.get('if_logged_in_verified_is_false', '')}"
+        )
+    return out
+
+
+def verify_text(
+    config: HarnessConfig,
+    text: str,
+    *,
+    timeout: int = 60,
+    min_len: int = 8,
+) -> dict[str, Any]:
+    """
+    Proof that submitted text appears in the live browser-use state snapshot.
+    Works for any site (posts, comments, forms, messages). Exit 0 = safe to claim success.
+    """
+    sess = load_session()
+    if not sess or not sess.get("cdp_url"):
+        return {
+            "verified": False,
+            "error": "No browser session. Run `nextbrowser login` first.",
+        }
+    aid = sess.get("account_id", "") or ""
+    bin_path = browser_use_bin()
+    if not bin_path:
+        return {"verified": False, "error": "browser-use CLI not installed."}
+
+    state_text, rc, stderr_tail = capture_state(
+        bin_path, sess["cdp_url"], account_id=aid, timeout=timeout
+    )
+    needle = (text or "").strip()
+    if len(needle) < min_len:
+        return {
+            "verified": False,
+            "error": f"Need at least {min_len} characters of text to verify.",
+            "text_needle": needle,
+        }
+    found = text_visible_in_state(state_text, needle, min_len=min_len)
+    gates = agent_gates(
+        logged_in_likely=None,
+        browser_use_ok=rc == 0,
+        site="",
+    )
+    return {
+        "verified": found,
+        "text_needle": needle[:120],
+        "account_id": aid,
+        "browser_use_ok": rc == 0,
+        "agent_gates": {
+            **gates,
+            "safe_to_claim_content_posted": found,
+            "safe_to_claim_comment_posted": found,
+        },
+        "stderr_tail": stderr_tail if rc != 0 else "",
+        "state_snippet": state_text[-1500:] if not found else "",
+        "error": None
+        if found
+        else (
+            "Submitted text NOT found on page — do NOT tell the user the action succeeded. "
+            "Re-run ui situation, complete the action again, then verify."
+        ),
+    }
 
 
 def scroll(
@@ -223,12 +311,16 @@ def chain(
         )
     cdp = sess["cdp_url"]
     posix = subprocess.os.name != "nt"
-    segments = []
+    parsed: list[list[str]] = []
     for raw in steps:
-        tokens = shlex.split(raw, posix=posix)
-        segments.append(shlex.join([bin_path, "--cdp-url", cdp, *tokens]))
-    script = " && ".join(segments)
-    proc = subprocess.run(script, shell=True, capture_output=True, text=True, timeout=timeout)
+        parsed.append(shlex.split(raw, posix=posix))
+    proc = bu_chain(
+        bin_path,
+        cdp,
+        parsed,
+        account_id=sess.get("account_id"),
+        timeout=timeout,
+    )
     return UIResult(
         success=proc.returncode == 0,
         command="chain",

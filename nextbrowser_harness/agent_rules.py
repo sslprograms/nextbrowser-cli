@@ -11,17 +11,19 @@ Edit this file (not the skill copies) to change agent behavior everywhere.
 
 from __future__ import annotations
 
-VERSION = "1.3"
+VERSION = "1.7"
 
 
 MUST_KNOW = [
     "Use the browser-use skill for UI (state / click / type). nextbrowser handles MLX, accounts, scrape.",
     "Tier-3 sites (Reddit-class, hard anti-bot) require Multilogin + a named account.",
     "Login in ONE command: `{cli} login <account> --url <url>` — keeps browser open the whole time.",
-    "To know logged-in vs logged-out and what tab is visible, run `{cli} ui situation` (reads live CDP + browser-use state — do not guess).",
+    "To know logged-in vs logged-out, run `{cli} ui require-login` or `{cli} ui situation` — read `agent_gates.logged_in_verified` in JSON; exit 1 means NOT logged in (do not guess).",
+    "NEVER claim content was posted/submitted unless `{cli} ui verify --text \"<exact text>\"` exits 0. Exit 1 = text is NOT on the page.",
+    "NEVER tell the user login succeeded unless `logged_in_verified` is true in situation/require-login JSON. `login` success=false means stop.",
     "No account yet? Ask user the name, then it is created automatically (Multilogin profile + harness binding).",
     "Need credentials and don't have them? Ask the user — never use placeholder USER/PASS.",
-    "Feed/social tasks (Reddit comments, scroll to post): use `{cli} agent-run \"<task>\" --account <name> --url <url>` — agent can scroll/click/type like next-browser.",
+    "Authenticated UI tasks (any site): use `{cli} agent-run \"<task>\" --account <name> --url <url>` or mechanical `ui` steps; always require-login + verify after submit.",
     "Between manual steps: `{cli} ui situation` then `{cli} ui scroll down --pages 1` / `ui state` / `ui click N`.",
     "`{cli} agent-run` stops Multilogin when finished (default). Use `--keep-open` only if you continue manually; else `{cli} ui close`.",
     "Read-only HTML: `{cli} scrape \"<url>\" --json` (any tier, no account).",
@@ -83,6 +85,8 @@ def automation_guide() -> dict:
             "browser-use close / multilogin stop-all before the task is done",
             "Raw Playwright Python for browser control",
             "Editing ~/.nextbrowser/multilogin_tokens.yaml by hand",
+            "Claiming 'posted', 'submitted', 'verified', or 'logged in' without require-login + verify exit 0",
+            "Ignoring CLI exit code 1 from ui situation / require-login / verify",
         ],
     }
 
@@ -99,6 +103,8 @@ def command_recipes() -> dict:
         "agent_run_with_url": '{cli} agent-run "<task>" --account <name> --url <url>',
         "ui_open": '{cli} ui open "<url>"',
         "ui_situation": "{cli} ui situation",
+        "ui_require_login": "{cli} ui require-login",
+        "ui_verify_text": '{cli} ui verify --text "<exact submitted text>"',
         "ui_state": "{cli} ui state",
         "ui_click": "{cli} ui click N",
         "ui_scroll": "{cli} ui scroll down --pages 1",

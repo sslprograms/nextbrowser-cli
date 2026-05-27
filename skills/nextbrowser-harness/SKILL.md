@@ -9,7 +9,7 @@ description: >-
   (run state/situation → read indices/refs → click/type specific index → verify).
   No simulation or placeholder actions. Immediately patch skill and/or run clean
   reinstall on version skew, profile locks, PATH issues, or stale state. Windows-first.
-version: 1.6.0
+version: 1.7.0
 license: MIT
 homepage: https://github.com/sslprograms/nextbrowser-cli
 user-invocable: true
@@ -36,39 +36,45 @@ platforms:
 - `references/multilogin.md`
 - `references/automation.md`
 - `references/windows-cli-quirks.md`
+- `references/anti-hallucination.md` **(mandatory for any authenticated UI task)**
 
-# Nextbrowser Harness v1.6 (Windows + Mechanical Steps + CLI Quirks Edition)
+# Nextbrowser Harness v1.7 (Proof Gates + Anti-Hallucination + Windows CLI Edition)
 
 **Run `nextbrowser status` first every session.** The JSON `agent_must_know` list is the single source of truth. The output below is from the current live system (May 2026).
 
-## Canonical `agent_must_know` (copy from latest `nextbrowser status`)
+## Canonical `agent_must_know` (EXACT from latest `nextbrowser status`)
 
 - Use the browser-use skill for UI (state / click / type). nextbrowser handles MLX, accounts, scrape.
 - Tier-3 sites (Reddit-class, hard anti-bot) require Multilogin + a named account.
 - Login in ONE command: `nextbrowser login <account> --url <url>` — keeps browser open the whole time.
-- To know logged-in vs logged-out and what tab is visible, run `nextbrowser ui situation` (reads live CDP + browser-use state — **do not guess**).
+- To know logged-in vs logged-out, run `nextbrowser ui require-login` or `nextbrowser ui situation` — read `agent_gates.logged_in_verified` in JSON; exit 1 means NOT logged in (do not guess).
+- NEVER claim content was posted/submitted unless `nextbrowser ui verify --text "<exact text>"` exits 0. Exit 1 = text is NOT on the page.
+- NEVER tell the user login succeeded unless `logged_in_verified` is true in situation/require-login JSON. `login` success=false means stop.
 - No account yet? Ask user the name, then it is created automatically (Multilogin profile + harness binding).
 - Need credentials and don't have them? Ask the user — never use placeholder USER/PASS.
-- Between logins or follow-ups, run `nextbrowser ui situation` then `nextbrowser ui state` / `nextbrowser ui click N` — same CDP session, browser stays open.
-- When the task is fully done: `nextbrowser ui close` (or `nextbrowser browser-use disconnect --account <name>`).
+- Feed/social tasks (Reddit comments, scroll to post): use `nextbrowser agent-run "<task>" --account <name> --url <url>` — agent can scroll/click/type like next-browser.
+- Between manual steps: `nextbrowser ui situation` then `nextbrowser ui scroll down --pages 1` / `ui state` / `ui click N`.
+- `nextbrowser agent-run` stops Multilogin when finished (default). Use `--keep-open` only if you continue manually; else `nextbrowser ui close`.
 - Read-only HTML: `nextbrowser scrape "<url>" --json` (any tier, no account).
 - Never: `nextbrowser exec --action state` for UI, raw Playwright Python, or `multilogin stop-all` mid-task.
 
 **Jake/DroboAI context:** Persistent anti-detect Reddit profiles for genuine-looking promotion (comments recommending DroboAI). Use named accounts (e.g. `reddit_main`). Prioritize transparent, step-by-step mechanical UI automation over fully autonomous `agent-run` when user is monitoring. Fix blockers (LOCK_PROFILE_ERROR, PATH, version mismatch, stale session) immediately by updating this skill and/or running the clean reinstall procedure.
 
-## Updated Command Map
+## Updated Command Map (v1.7 proof-gated)
 
 | Goal | Command |
 |------|---------|
 | Get canonical rules + current state | `nextbrowser status` |
-| Check live tab, login heuristic, elements | `nextbrowser ui situation` **(primary)** |
-| First-time / manual login | `nextbrowser login <account> --url <url>` (optionally with `--username-index N --password-index N --submit-index N --username ...`) |
-| Autonomous agent task | `nextbrowser agent-run "<task>" --account <name> [--url <url>]` |
-| Follow-up UI (after situation) | `nextbrowser ui state`<br>`nextbrowser ui click <N>`<br>`nextbrowser ui type <N> "text"`<br>`nextbrowser ui eval "js"`<br>`nextbrowser ui screenshot` |
-| End session cleanly | `nextbrowser ui close` |
+| Prove logged in (fail-closed) | `nextbrowser ui require-login` **(exit 0 required; checks agent_gates.logged_in_verified)** |
+| Check live tab/situation (with gates) | `nextbrowser ui situation` |
+| Prove submitted text on page (any action) | `nextbrowser ui verify --text "<exact text>"` **(exit 0 required)** |
+| First-time / manual login | `nextbrowser login <account> --url <url>` |
+| Autonomous Reddit/social task | `nextbrowser agent-run "<task>" --account <name> --url <url>` |
+| Follow-up mechanical UI | `nextbrowser ui state` / `ui click N` / `ui type N "text"` / `ui scroll down --pages 1` / `ui situation` |
+| End session | `nextbrowser ui close` |
 | Scrape | `nextbrowser scrape "<url>" --json` |
-| Tier recommendation | `nextbrowser tier lookup "<url>"` |
-| Account + MLX health | `nextbrowser account list`<br>`nextbrowser multilogin doctor`<br>`browser-use doctor` |
+| Tier lookup | `nextbrowser tier lookup "<url>"` |
+| Health checks | `nextbrowser account list` / `nextbrowser multilogin doctor` / `browser-use doctor` |
 
 ## Architecture & Pairing
 

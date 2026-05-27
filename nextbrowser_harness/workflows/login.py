@@ -6,16 +6,14 @@ Wraps:
   2. Connect Multilogin (CDP, keep-alive)
   3. Open URL via browser-use, capture initial element map
   4. Optionally run a credential chain (one shell pass — browser never closes)
-  5. Return JSON: account, cdp_url, indexed elements, next_commands
+  5. Return JSON: account, cdp_url, indexed elements, logged_in (fail-closed)
 
 Agents call this **once** per login. They do not need to chain manually.
 """
 
 from __future__ import annotations
 
-import os
 import re
-import shlex
 import subprocess
 from dataclasses import asdict, dataclass, field
 from typing import Any
@@ -29,9 +27,9 @@ from nextbrowser_harness.config import HarnessConfig
 from nextbrowser_harness.integrations.browser_use.bridge import (
     browser_use_bin,
     connect_account,
-    load_session,
 )
 from nextbrowser_harness.workflows.browser_intel import infer_logged_in_with_reason
+from nextbrowser_harness.workflows.browser_use_exec import bu_chain
 
 
 @dataclass
@@ -89,56 +87,31 @@ def _ensure_account(
     )
 
 
-def _bu_call(cdp: str, args: list[str], *, timeout: int = 60) -> subprocess.CompletedProcess:
-    bin_path = browser_use_bin()
-    if not bin_path:
-        raise FileNotFoundError(
-            "browser-use CLI not installed. Run: curl -fsSL https://browser-use.com/cli/install.sh | bash"
+def _finalize_success(
+    result: LoginResult,
+    *,
+    attempted_credential_login: bool,
+) -> LoginResult:
+    """Fail closed: do not report success when the live page still shows a login/auth gate."""
+    if result.error and result.logged_in is not True:
+        result.success = False
+        return result
+    if attempted_credential_login:
+        result.success = result.logged_in is True
+        if not result.success:
+            result.agent_prompt = (
+                "Login form was submitted but the live page does NOT look logged in. "
+                "Run `nextbrowser ui situation` — if logged_in_verified is false, ask the user "
+                "for credentials or complete 2FA manually. Do NOT claim you are logged in."
+            )
+    elif result.logged_in is False:
+        result.success = False
+        result.agent_prompt = (
+            "Browser opened but page shows logged OUT (Log in / Sign up). "
+            "Run login with --username/--password and indices from `ui state`, or complete login "
+            "with `ui click` / `ui type` then `nextbrowser ui require-login`."
         )
-    cmd = [bin_path, "--cdp-url", cdp, *args]
-    return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
-
-
-def _bu_chain(cdp: str, steps: list[list[str]], *, timeout: int = 180) -> subprocess.CompletedProcess:
-    """Run steps as ONE shell chain so daemon keeps the browser open.
-    Windows-compatible version to avoid "The filename, directory name, or volume label syntax is incorrect" error.
-    Uses unique session 'reddit-dropship' to avoid 'default' session conflict.
-    """
-    bin_path = browser_use_bin()
-    if not bin_path:
-        raise FileNotFoundError("browser-use CLI not installed")
-    session_name = "reddit-dropship"
-    if os.name == "nt":
-        # Windows: build quoted segments and use cmd /c for reliable && chaining with full EXE paths
-        segments = []
-        for step in steps:
-            cmd_parts = [bin_path, "--cdp-url", cdp, "--session", session_name] + step
-            # Quote parts that need it for cmd.exe
-            quoted_parts = []
-            for p in cmd_parts:
-                s = str(p)
-                if " " in s or "&" in s or "(" in s or ")" in s or '"' in s:
-                    quoted_parts.append(f'"{s}"')
-                else:
-                    quoted_parts.append(s)
-            segments.append(" ".join(quoted_parts))
-        script = " && ".join(segments)
-        return subprocess.run(
-            ["cmd", "/c", script],
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-            shell=False,
-        )
-    else:
-        # Original POSIX path with session
-        segments = [
-            shlex.join([bin_path, "--cdp-url", cdp, "--session", session_name, *step]) for step in steps
-        ]
-        script = " && ".join(segments)
-        return subprocess.run(
-            script, shell=True, capture_output=True, text=True, timeout=timeout
-        )
+    return result
 
 
 def login(
@@ -165,8 +138,8 @@ def login(
       * open(url) and state() — agents read indices from result.state
       * if indices+creds supplied → chain input/click in one shell pass
 
-    Always returns next_commands so the agent knows how to continue without
-    breaking the keep-alive contract.
+    `success` is True only when logged_in is True (after creds) or unknown/open-only
+    without a definite logged-out signal.
     """
     if not url:
         return LoginResult(success=False, account_id=account_id, error="url is required")
@@ -199,6 +172,15 @@ def login(
         )
 
     cdp = conn["cdp_url"]
+    bin_path = browser_use_bin()
+    if not bin_path:
+        return LoginResult(
+            success=False,
+            account_id=account.account_id,
+            error="browser-use CLI not installed",
+            agent_prompt="Install browser-use CLI: curl -fsSL https://browser-use.com/cli/install.sh | bash",
+        )
+
     result = LoginResult(
         success=True,
         account_id=account.account_id,
@@ -206,16 +188,24 @@ def login(
         cdp_url=cdp,
         url=url,
     )
+    attempted_creds = False
 
     # Step 1: open + state in one chain so daemon stays alive
     try:
-        proc = _bu_chain(cdp, [["open", url], ["state"]], timeout=120)
+        proc = bu_chain(
+            bin_path,
+            cdp,
+            [["open", url], ["state"]],
+            account_id=account.account_id,
+            timeout=120,
+        )
         result.actions_run.extend(["open", "state"])
         result.state = (proc.stdout or "")[-4000:]
         explanation, inferred = infer_logged_in_with_reason(result.state)
         result.logged_in = inferred
         result.logged_in_reason = explanation
         if proc.returncode != 0:
+            result.success = False
             result.error = (proc.stderr or "")[-2000:]
             result.agent_prompt = "browser-use failed to open URL — check `browser-use doctor`."
             return result
@@ -229,6 +219,7 @@ def login(
     has_indices = all(x is not None for x in (username_index, password_index, submit_index))
     has_creds = bool(username) and bool(password)
     if has_indices and has_creds:
+        attempted_creds = True
         steps = [
             ["input", str(username_index), username],
             ["input", str(password_index), password],
@@ -236,7 +227,13 @@ def login(
             ["state"],
         ]
         try:
-            proc = _bu_chain(cdp, steps, timeout=180)
+            proc = bu_chain(
+                bin_path,
+                cdp,
+                steps,
+                account_id=account.account_id,
+                timeout=180,
+            )
             result.actions_run.extend(["input", "input", "click", "state"])
             result.state = (proc.stdout or "")[-4000:]
             if proc.returncode == 0:
@@ -259,20 +256,29 @@ def login(
             "Use `nextbrowser browser-use chain open URL state \"input N val\" \"click M\"`."
         )
 
-    # Always tell the agent how to continue without breaking keep-alive
     result.next_commands = [
-        "nextbrowser ui situation   # URL + logged-in estimate from live CDP tab",
-        f'nextbrowser ui state',
-        f'nextbrowser ui click <N>',
-        f'nextbrowser ui type <N> "text"',
-        f'nextbrowser ui close   # only when fully done',
+        "nextbrowser ui require-login   # exit 0 = logged in verified; exit 1 = STOP",
+        "nextbrowser ui situation",
+        "nextbrowser ui state",
+        "nextbrowser ui click <N>",
+        'nextbrowser ui type <N> "text"',
+        'nextbrowser ui verify --text "<exact text after submit>"',
+        "nextbrowser ui close",
     ]
-    if not result.agent_prompt:
+    if not result.agent_prompt and result.logged_in is True:
         result.agent_prompt = (
-            f"MLX profile '{account.account_id}' is open (keep-alive). "
-            "Continue with `nextbrowser ui ...` — do NOT close until task is done. "
-            "Run `nextbrowser ui close` to disconnect when finished."
+            f"MLX profile '{account.account_id}' is open and looks logged in. "
+            "Before authenticated actions, run `nextbrowser ui require-login`. After submit, "
+            "`nextbrowser ui verify --text \"...\"` — exit 0 only means that text is on the page."
         )
+    elif not result.agent_prompt:
+        result.agent_prompt = (
+            f"MLX profile '{account.account_id}' is open. "
+            "Run `nextbrowser ui require-login` before claiming logged in. "
+            "Do NOT tell the user content was posted until `ui verify --text` exits 0."
+        )
+
+    result = _finalize_success(result, attempted_credential_login=attempted_creds)
 
     if not keep_open:
         from nextbrowser_harness.integrations.browser_use.bridge import disconnect_account

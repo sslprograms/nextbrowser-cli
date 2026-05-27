@@ -21,10 +21,29 @@ def count_indexed_elements(state_text: str) -> int:
 
 
 _STRENGTH_LOGGED_OUT = (
-    r"\b(sign in|log in|login|create account|sign up|register|forgot password)\b"
+    r"\b(sign in|log in|login|create account|sign up|register|forgot password|"
+    r"reset password|continue with google|continue with apple)\b"
 )
-_STRENGTH_LOGGED_IN = r"\b(log out|logout|sign out|signout)\b"
-_WEAK_LOGGED_IN = r"\b(my account|your account|profile|settings|notifications|inbox)\b"
+_STRENGTH_LOGGED_IN = r"\b(log out|logout|sign out|signout|sign-out)\b"
+_WEAK_LOGGED_IN = (
+    r"\b(my account|your account|profile|settings|notifications|inbox|"
+    r"user menu|avatar|compose|create post|new post|dashboard|account settings)\b"
+)
+_AUTH_URL_MARKERS = (
+    "/login",
+    "/log-in",
+    "/signin",
+    "/sign-in",
+    "/signup",
+    "/sign-up",
+    "/register",
+    "/auth/",
+    "/oauth",
+    "/session/new",
+    "/accounts/login",
+)
+_APP_URL_MARKERS = ("/home", "/feed", "/dashboard", "/inbox", "/app/", "/portal")
+_PROFILE_URL_MARKERS = ("/user/", "/users/", "/profile/", "/account/", "/me/", "/@")
 
 
 def infer_logged_in_from_state(state_text: str) -> bool | None:
@@ -56,6 +75,17 @@ def infer_logged_in_with_reason(state_text: str) -> tuple[str, bool | None]:
     login_formish = bool(re.search(_STRENGTH_LOGGED_OUT, text))
     weak_in = bool(re.search(_WEAK_LOGGED_IN, text))
 
+    # Common auth gate: both "log in" and "sign up" visible, no sign-out
+    if (
+        re.search(r"\b(log in|sign in)\b", text)
+        and re.search(r"\b(sign up|create account|register)\b", text)
+        and not logoutish
+    ):
+        return (
+            "Auth gate visible (Log in + Sign up) with no sign-out — not logged in.",
+            False,
+        )
+
     if login_formish and not logoutish:
         return (
             "Login / sign-up UI markers visible (likely logged out or on auth page).",
@@ -69,11 +99,15 @@ def infer_logged_in_with_reason(state_text: str) -> tuple[str, bool | None]:
             True,
         )
 
-    if "/login" in url or "/signin" in url or "/sign-in" in url or "/auth" in url:
+    if any(m in url for m in _AUTH_URL_MARKERS):
         if logoutish:
-            return ("On auth-ish URL but also see log out — ambiguous; treat as logged in.", True)
-        return ("URL suggests auth/login path (likely logged out).", False)
-    if any(k in url for k in ("/home", "/feed", "/dashboard", "/inbox")):
+            return ("On auth URL but sign-out also visible — treating as logged in.", True)
+        return ("URL is an auth/login path (likely logged out).", False)
+
+    if any(m in url for m in _PROFILE_URL_MARKERS) and not login_formish:
+        return ("On profile/account URL without login gate (likely logged in).", True)
+
+    if any(k in url for k in _APP_URL_MARKERS):
         if login_formish:
             return (
                 "On app URL but login markers present — partly loaded or gated? uncertain.",
@@ -85,6 +119,62 @@ def infer_logged_in_with_reason(state_text: str) -> tuple[str, bool | None]:
         "No strong login vs logged-out markers in visible state snapshot — uncertain.",
         None,
     )
+
+
+def normalize_for_match(text: str) -> str:
+    return re.sub(r"\s+", " ", (text or "").lower()).strip()
+
+
+def text_visible_in_state(state_text: str, needle: str, *, min_len: int = 8) -> bool:
+    """Case-insensitive substring check — proves submitted text appears on the live page."""
+    n = normalize_for_match(needle)
+    if len(n) < min_len:
+        return False
+    hay = normalize_for_match(state_text)
+    return n in hay
+
+
+def agent_gates(
+    *,
+    logged_in_likely: bool | None,
+    browser_use_ok: bool,
+    site: str = "",
+) -> dict[str, Any]:
+    """
+    Machine-readable rules for external agents — if these are false, do NOT claim success.
+    """
+    logged_ok = logged_in_likely is True and browser_use_ok
+    login_cmd = (
+        f"nextbrowser login <account> --url {site}"
+        if site
+        else "nextbrowser login <account> --url <target-site>"
+    )
+    return {
+        "logged_in_verified": logged_ok,
+        "safe_to_claim_logged_in": logged_ok,
+        "safe_to_claim_content_posted": False,  # only True after ui verify --text exits 0
+        "safe_to_claim_comment_posted": False,  # alias; same as content_posted
+        "safe_to_claim_task_complete": logged_ok,
+        "forbidden_without_proof": [
+            "logged in",
+            "login complete",
+            "posted",
+            "published",
+            "submitted successfully",
+            "comment posted",
+            "verified",
+            "task complete",
+        ],
+        "required_commands": [
+            "nextbrowser ui require-login  # exit 0 before any authenticated action",
+            "nextbrowser ui situation  # read agent_gates; exit 1 if not logged in",
+            'nextbrowser ui verify --text "<exact submitted text>"  # exit 0 = on-page proof',
+        ],
+        "if_logged_in_verified_is_false": (
+            f"STOP. Run `{login_cmd}` with real credentials or finish auth in the MLX window, "
+            "then `nextbrowser ui require-login`. Do not claim login or that content was posted."
+        ),
+    }
 
 
 @dataclass
@@ -103,6 +193,7 @@ class BrowserSituation:
     browser_use_ok: bool = False
     error: str | None = None
     hints: list[str] = field(default_factory=list)
+    agent_gates: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -135,6 +226,15 @@ def build_situation_from_state_text(
         )
 
     ok = browser_use_exit_code == 0 and bool(snippet.strip())
+    gates = agent_gates(logged_in_likely=likely, browser_use_ok=ok, site=url)
+    if not gates["logged_in_verified"]:
+        hints.append(gates["if_logged_in_verified_is_false"])
+    hints.append(
+        "After any submit (post, comment, form, message), run: "
+        'nextbrowser ui verify --text "<exact text you submitted>" '
+        "(exit 0 = visible on page; exit 1 = action did NOT succeed — do not claim success)."
+    )
+
     return BrowserSituation(
         connected=True,
         account_id=account_id,
@@ -148,4 +248,5 @@ def build_situation_from_state_text(
         browser_use_ok=ok,
         error=None if ok else "browser-use state failed or returned empty output",
         hints=hints,
+        agent_gates=gates,
     )

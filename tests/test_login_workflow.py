@@ -58,7 +58,7 @@ def test_login_happy_path_with_indices(tmp_path, monkeypatch):
     AccountRegistry(cfg).register("alice", mlx_profile_id="prof-1", mlx_folder_id="f1")
 
     with patch("nextbrowser_harness.workflows.login.connect_account") as connect_mock, patch(
-        "nextbrowser_harness.workflows.login._bu_chain"
+        "nextbrowser_harness.workflows.login.bu_chain"
     ) as chain_mock, patch(
         "nextbrowser_harness.workflows.login.browser_use_bin", return_value="/usr/bin/browser-use"
     ):
@@ -67,11 +67,22 @@ def test_login_happy_path_with_indices(tmp_path, monkeypatch):
             "cdp_url": "http://127.0.0.1:9222",
             "account_id": "alice",
         }
+
         class FakeProc:
             returncode = 0
-            stdout = "[1] textbox Username\n[2] textbox Password\n[3] button Log in"
+            stdout = ""
             stderr = ""
-        chain_mock.return_value = FakeProc()
+
+        logged_in_state = (
+            "Current URL: https://example.com/home\n[8]<button>Log out</button>"
+        )
+        login_form_state = (
+            "[1] textbox Username\n[2] textbox Password\n[3] button Log in"
+        )
+        chain_mock.side_effect = [
+            type("P", (), {"returncode": 0, "stdout": login_form_state, "stderr": ""})(),
+            type("P", (), {"returncode": 0, "stdout": logged_in_state, "stderr": ""})(),
+        ]
 
         res = login(
             cfg,

@@ -14,9 +14,9 @@ Multimodular browser harness. Two use cases:
 1. Load **browser-use** skill + this skill.
 2. Ask user: account name / new login / credentials when missing.
 3. **Manual login**: `nextbrowser login <name> --url <url>` (auto-creates account if needed).
-4. **AI agent task**: `nextbrowser agent-run "<task>" --account <name>` (scroll/comment on Reddit — stops MLX when done).
-5. **Know what tab is showing**: `nextbrowser ui situation` before claiming logged in/out — never guess from memory.
-6. **Follow-up actions**: `nextbrowser ui state | click N | type N "text" | eval "..."`.
+4. **AI agent task**: `nextbrowser agent-run "<task>" --account <name>` (any site — stops MLX when done unless `--keep-open`).
+5. **Proof before claims** (all sites): `nextbrowser ui require-login` (exit 0 = logged in). After any submit: `nextbrowser ui verify --text "<exact text>"` (exit 0 = visible on page). `ui situation` exits 1 when logged out (`--permissive` only for debugging).
+6. **Follow-up actions**: `nextbrowser ui state | click N | type N "text" | scroll down --pages 1`.
 7. **End task**: `nextbrowser ui close`.
 8. **Scrape only**: `nextbrowser scrape "<url>" --json`.
 
@@ -27,5 +27,6 @@ Multimodular browser harness. Two use cases:
 - `browser-use close` / `multilogin stop-all` before `ui close`.
 - Raw Playwright Python for navigation.
 - Placeholder credentials.
+- Telling the user you logged in or posted when `require-login` / `verify` failed or was skipped.
 
-Skill: `skills/nextbrowser-harness/SKILL.md`
+Skill: `skills/nextbrowser-harness/SKILL.md` — see `references/anti-hallucination.md`

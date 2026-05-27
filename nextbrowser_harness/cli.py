@@ -219,9 +219,27 @@ def main(argv: list[str] | None = None) -> int:
         help="Browser-use UI commands using the active CDP session (state, click N, type N text, close)",
     )
     ui_sub = p_ui.add_subparsers(dest="ui_cmd", required=True)
-    ui_sub.add_parser(
+    p_ui_situation = ui_sub.add_parser(
         "situation",
-        help="Live snapshot: URL, logged-in estimate, registry mismatch hints, element map snippet",
+        help="Live snapshot: URL, logged-in estimate, agent_gates, element map snippet",
+    )
+    p_ui_situation.add_argument(
+        "--permissive",
+        action="store_true",
+        help="Do not fail exit code when logged out (default: strict — exit 1 if not logged in)",
+    )
+    ui_sub.add_parser(
+        "require-login",
+        help="Fail-closed gate: exit 0 only when live page proves logged in",
+    )
+    p_ui_verify = ui_sub.add_parser(
+        "verify",
+        help="Proof submitted text is visible in live state (exit 0 = safe to claim success)",
+    )
+    p_ui_verify.add_argument(
+        "--text",
+        required=True,
+        help="Exact substring to find in browser-use state (min 8 chars)",
     )
     ui_sub.add_parser("state", help="List clickable elements with indices")
     p_ui_scroll = ui_sub.add_parser("scroll", help="Scroll page (browser-use scroll)")
@@ -716,11 +734,28 @@ def main(argv: list[str] | None = None) -> int:
             print(json.dumps(res.to_dict(), indent=2))
             return 0 if res.success else 1
         if cmd == "situation":
-            out = ui_workflow.situation(harness.config)
+            out = ui_workflow.situation(
+                harness.config,
+                strict=not args.permissive,
+            )
             print(json.dumps(out, indent=2))
             if not out.get("connected"):
                 return 1
-            return 0 if out.get("browser_use_ok") else 1
+            if not out.get("browser_use_ok"):
+                return 1
+            if out.get("cli_should_exit_nonzero"):
+                return 1
+            return 0
+        if cmd == "require-login":
+            out = ui_workflow.require_login(harness.config)
+            print(json.dumps(out, indent=2))
+            if not out.get("connected"):
+                return 1
+            return 0 if out.get("require_login_ok") else 1
+        if cmd == "verify":
+            out = ui_workflow.verify_text(harness.config, args.text)
+            print(json.dumps(out, indent=2))
+            return 0 if out.get("verified") else 1
         if cmd == "close":
             out = ui_workflow.close(harness.config)
             print(json.dumps(out, indent=2))
