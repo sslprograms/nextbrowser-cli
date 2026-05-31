@@ -2,7 +2,7 @@
 name: nextbrowser-harness
 description: >-
   Multilogin X + raw Chrome DevTools Protocol (CDP). Any AgentSkills host drives MLX
-  via `nextbrowser cdp send` — no indexed click shortcuts, no browser-use API key.
+  via `nextbrowser cdp send` — no indexed click shortcuts, no extra API key.
 version: 2.1.0
 license: MIT
 user-invocable: true
@@ -35,17 +35,14 @@ nextbrowser agent install --host all --force
 | **You (host agent)** | `cdp send Page.*` / `DOM.*` / `Input.*` / `Runtime.*` |
 | **nextbrowser** | Starts MLX, attaches CDP session, returns JSON results |
 
-**Not used:** browser-use, indexed `ui click N` shortcuts (legacy only).
+**Never use (CLI returns error):** `ui`, `ui close`, `state`, `click`, `type`, indexed shortcuts.
 
 ## Control loop
 
 ```bash
-nextbrowser status
 nextbrowser connect --account <name>
-nextbrowser cdp session
-nextbrowser cdp send Page.navigate --params '{"url":"https://example.com"}'
-nextbrowser cdp send DOM.getDocument --params '{"depth":-1,"pierce":true}'
-nextbrowser cdp send Runtime.evaluate --params '{"expression":"document.title","returnByValue":true}'
+nextbrowser cdp navigate --account <name> "https://example.com"
+nextbrowser cdp send --account <name> <Domain.method> --params '<json>'
 nextbrowser disconnect --account <name>
 ```
 
@@ -53,15 +50,29 @@ nextbrowser disconnect --account <name>
 nextbrowser cdp catalog   # example methods
 ```
 
+## Login (deterministic)
+
+```bash
+nextbrowser account set-credentials <name> --username "U" --password "P"
+nextbrowser login <name> --url "https://site.com/login"
+```
+
+Finds the form, types credentials with trusted CDP `Input` events, submits, and verifies —
+returns `logged_in` + before/after screenshots. Use this instead of hand-building login clicks.
+
 ## Rules
 
-1. **Every** action and observation = `cdp send` (no `ui click` / `ui type` for automation).
-2. Read JSON output after each send; pick `nodeId`, coordinates, etc. for the next send.
-3. Prove success with CDP (Runtime.evaluate / DOM) before telling the user something worked.
-4. `nextbrowser multilogin doctor` if MLX won't start.
+1. **Every** command includes `--account <name>`. Connect does not save a session file unless `--persist-session`.
+2. **New page** → `cdp survey --account <name>` before any action. Each segment has `visible_text` + **`screenshot_path`** (PNG). **Open every screenshot with your vision model** — snapshots are how you understand layout.
+3. After important actions → `cdp snapshot --account <name>` to verify visually.
+4. Only after survey + snapshots → `cdp send` for clicks/types.
+5. Read JSON after each send; use coordinates from survey snapshots + `interactive[]`.
+6. Prove success with **snapshot +** CDP (Runtime.evaluate) before telling the user something worked.
+7. `nextbrowser multilogin doctor` if MLX won't start.
 
 ## References
 
 - `references/cdp-agent.md` — CDP recipes
 - `references/agent-host-drives-browser.md`
 - `references/anti-hallucination.md`
+- `references/commands.md` · `references/troubleshooting.md` · `references/multilogin.md`

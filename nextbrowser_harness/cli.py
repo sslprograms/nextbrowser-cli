@@ -27,13 +27,13 @@ from nextbrowser_harness.platform_paths import (
 def main(argv: list[str] | None = None) -> int:
     argv = list(argv if argv is not None else sys.argv[1:])
 
-    # Native browser-use control over MLX CDP (connect | mcp | state | click | …)
+    # MLX + raw CDP control (connect | disconnect | login | cdp); reject legacy verbs.
     from nextbrowser_harness.config import HarnessConfig, resolve_config_path
 
     early_cfg = HarnessConfig.load(resolve_config_path())
-    from nextbrowser_harness.integrations.browser_use.agent_cli import try_dispatch_native_browser_use
+    from nextbrowser_harness.integrations.mlx_cdp.agent_cli import try_dispatch_cdp
 
-    native_rc = try_dispatch_native_browser_use(early_cfg, argv)
+    native_rc = try_dispatch_cdp(early_cfg, argv)
     if native_rc is not None:
         return native_rc
 
@@ -111,7 +111,7 @@ def main(argv: list[str] | None = None) -> int:
     p_exec.add_argument("--action", action="append", default=None)
     p_exec.add_argument(
         "--element-search",
-        choices=["playwright", "indexed", "browser_use"],
+        choices=["playwright", "indexed"],
         default=None,
         help="Element lookup: indexed (state/click:N for agents) or playwright (CSS)",
     )
@@ -165,7 +165,7 @@ def main(argv: list[str] | None = None) -> int:
     p_acct_run.add_argument("--json", action="store_true", default=True)
     p_acct_creds = acct_sub.add_parser(
         "set-credentials",
-        help="Store username/password for agent-run sensitive_data (local file, chmod 600)",
+        help="Store username/password for CDP login assistance (local file, chmod 600)",
     )
     p_acct_creds.add_argument("account_id")
     p_acct_creds.add_argument("--username", required=True)
@@ -173,59 +173,17 @@ def main(argv: list[str] | None = None) -> int:
     p_acct_creds.add_argument(
         "--service",
         default="",
-        help="Optional domain key for browser-use sensitive_data (default: derived from account site/url)",
-    )
-
-    p_bu = sub.add_parser(
-        "browser-use",
-        aliases=["bu"],
-        help="Connect Multilogin CDP to browser-use CLI (use browser-use skill for UI)",
-    )
-    bu_sub = p_bu.add_subparsers(dest="bu_cmd", required=True)
-    p_bu_connect = bu_sub.add_parser("connect", help="Start MLX profile; save CDP for browser-use")
-    p_bu_connect.add_argument("--account", required=True, help="Registered account name")
-    p_bu_connect.add_argument("--headless", action="store_true")
-    bu_sub.add_parser("doctor", help="Check browser-use CLI + saved CDP session")
-    bu_sub.add_parser("session", help="Show saved browser-use CDP session JSON")
-    p_bu_run = bu_sub.add_parser("run", help="Run browser-use with --cdp-url from connect")
-    p_bu_run.add_argument("bu_args", nargs=argparse.REMAINDER, help="e.g. state, click 5, open URL")
-    p_bu_chain = bu_sub.add_parser(
-        "chain",
-        help="Run multiple browser-use steps in one shell (keeps MLX open)",
-    )
-    p_bu_chain.add_argument(
-        "steps",
-        nargs="+",
-        help='Steps as quoted strings, e.g. \'open "https://site.com"\' \'state\' \'click 5\'',
-    )
-    p_bu_disconnect = bu_sub.add_parser(
-        "disconnect",
-        help="Stop MLX profile when login is done (cookies already saved in profile)",
-    )
-    p_bu_disconnect.add_argument("--account", required=True)
-    p_bu_skill = bu_sub.add_parser(
-        "install-skill",
-        help="Download official browser-use SKILL.md for your agent",
-    )
-    p_bu_skill.add_argument(
-        "--dest",
-        default=None,
-        help="Skill dir (default: ~/.cursor/skills/browser-use)",
+        help="Optional domain key for credential lookup (default: derived from account site/url)",
     )
 
     p_login = sub.add_parser(
         "login",
-        help="One-shot tier-3 login: ensure account, connect MLX, open URL, optional credentials",
+        help="Auto-login over CDP: connect, fill credentials, submit, verify (or survey if no creds)",
     )
     p_login.add_argument("account_id", help="Account name (created automatically if missing)")
     p_login.add_argument("--url", required=True, help="URL to open")
     p_login.add_argument("--username", default=None)
     p_login.add_argument("--password", default=None)
-    p_login.add_argument(
-        "--username-index", type=int, default=None, help="Element index from state (chain login)"
-    )
-    p_login.add_argument("--password-index", type=int, default=None)
-    p_login.add_argument("--submit-index", type=int, default=None)
     p_login.add_argument("--site", default="", help="Site label for new account")
     p_login.add_argument(
         "--no-create",
@@ -235,75 +193,8 @@ def main(argv: list[str] | None = None) -> int:
     p_login.add_argument(
         "--close",
         action="store_true",
-        help="Disconnect MLX when finished (default: keep open for follow-up `ui` commands)",
+        help="Disconnect MLX when finished (default: keep open for follow-up cdp commands)",
     )
-
-    p_ui = sub.add_parser(
-        "ui",
-        help="Browser-use UI commands using the active CDP session (state, click N, type N text, close)",
-    )
-    ui_sub = p_ui.add_subparsers(dest="ui_cmd", required=True)
-    p_ui_situation = ui_sub.add_parser(
-        "situation",
-        help="Live snapshot: URL, logged-in estimate, agent_gates, element map snippet",
-    )
-    p_ui_situation.add_argument(
-        "--permissive",
-        action="store_true",
-        help="Do not fail exit code when logged out (default: strict — exit 1 if not logged in)",
-    )
-    ui_sub.add_parser(
-        "require-login",
-        help="Fail-closed gate: exit 0 only when live page proves logged in",
-    )
-    p_ui_verify = ui_sub.add_parser(
-        "verify",
-        help="Proof submitted text is visible in live state (exit 0 = safe to claim success)",
-    )
-    p_ui_verify.add_argument(
-        "--text",
-        required=True,
-        help="Exact substring to find in browser-use state (min 8 chars)",
-    )
-    ui_sub.add_parser("state", help="List clickable elements with indices")
-    p_ui_scroll = ui_sub.add_parser("scroll", help="Scroll page (browser-use scroll)")
-    p_ui_scroll.add_argument(
-        "direction",
-        nargs="?",
-        default="down",
-        choices=["down", "up"],
-        help="Scroll direction (default: down)",
-    )
-    p_ui_scroll.add_argument(
-        "--pages",
-        type=float,
-        default=1.0,
-        help="Number of pages to scroll (e.g. 0.5, 1, 2)",
-    )
-    p_ui_open = ui_sub.add_parser("open", help="Navigate to URL")
-    p_ui_open.add_argument("url")
-    p_ui_click = ui_sub.add_parser("click", help="Click by index")
-    p_ui_click.add_argument("index")
-    p_ui_type = ui_sub.add_parser("type", help="Type into element by index")
-    p_ui_type.add_argument("index")
-    p_ui_type.add_argument("text")
-    p_ui_input = ui_sub.add_parser("input", help="Alias of `type`")
-    p_ui_input.add_argument("index")
-    p_ui_input.add_argument("text")
-    p_ui_keys = ui_sub.add_parser("keys", help="Send keys (Enter, Control+a, ...)")
-    p_ui_keys.add_argument("combo")
-    p_ui_eval = ui_sub.add_parser("eval", help="Run JavaScript")
-    p_ui_eval.add_argument("code")
-    p_ui_screenshot = ui_sub.add_parser("screenshot", help="Take screenshot")
-    p_ui_screenshot.add_argument("path", nargs="?", default=None)
-    p_ui_chain = ui_sub.add_parser(
-        "chain",
-        help="Run multiple browser-use steps in one shell (keeps browser open)",
-    )
-    p_ui_chain.add_argument("steps", nargs="+")
-    p_ui_raw = ui_sub.add_parser("run", help="Pass arbitrary args to browser-use")
-    p_ui_raw.add_argument("bu_args", nargs=argparse.REMAINDER)
-    ui_sub.add_parser("close", help="Disconnect browser-use and stop MLX profile (end of task)")
 
     p_cdp = sub.add_parser(
         "cdp",
@@ -313,36 +204,6 @@ def main(argv: list[str] | None = None) -> int:
         "cdp_argv",
         nargs=argparse.REMAINDER,
         help="subcommand: session | send <Method> | catalog",
-    )
-
-    p_agent_run = sub.add_parser(
-        "agent-run",
-        help="Run the AI browser agent over a Multilogin CDP session (browser-use + LLM)",
-    )
-    p_agent_run.add_argument("task", help="Task description for the AI agent")
-    p_agent_run.add_argument(
-        "--account", default=None, help="Multilogin account name (uses existing session if omitted)"
-    )
-    p_agent_run.add_argument("--url", default=None, help="URL to open before task (preflight + navigation)")
-    p_agent_run.add_argument(
-        "--login-url",
-        default=None,
-        help="Login page URL if different from --url (used when not logged in)",
-    )
-    p_agent_run.add_argument("--username", default=None, help="Site username (also saved for account)")
-    p_agent_run.add_argument("--password", default=None, help="Site password (also saved for account)")
-    p_agent_run.add_argument(
-        "--model", default=None,
-        help="LLM model name (default: gpt-4o or NEXTBROWSER_LLM_MODEL env)",
-    )
-    p_agent_run.add_argument("--max-steps", type=int, default=100, help="Max agent steps (default: 100)")
-    p_agent_run.add_argument("--captcha", action="store_true", help="Enable captcha solving guidance")
-    p_agent_run.add_argument("--approval", action="store_true", help="Enable content approval mode")
-    p_agent_run.add_argument("--headless", action="store_true", help="Run MLX browser headless")
-    p_agent_run.add_argument(
-        "--keep-open",
-        action="store_true",
-        help="Leave Multilogin profile running after task (default: stop profile when done)",
     )
 
     p_mlx = sub.add_parser("multilogin", help="Multilogin X API (see Postman docs)")
@@ -397,11 +258,6 @@ def main(argv: list[str] | None = None) -> int:
         )
         p_inst.add_argument("--workspace", type=str, default=None)
         p_inst.add_argument("--force", action="store_true")
-        p_inst.add_argument(
-            "--with-browser-use",
-            action="store_true",
-            help="Also install official browser-use skill (recommended for UI automation)",
-        )
         subp.add_parser("doctor", help="Check CLI, bundled skill, and install paths for all hosts")
         subp.add_parser("list-hosts", help="List agent hosts (OpenClaw, Claude Code, Cursor, …)")
         return p
@@ -544,11 +400,6 @@ def main(argv: list[str] | None = None) -> int:
                 print(str(e))
                 return 1
             print(print_post_install(paths))
-            if getattr(args, "with_browser_use", False):
-                from nextbrowser_harness.integrations.browser_use.bridge import install_browser_use_skill
-
-                bu_path = install_browser_use_skill()
-                print(f"\nInstalled browser-use skill: {bu_path}")
             return 0
 
     if args.command == "multilogin":
@@ -699,7 +550,7 @@ def main(argv: list[str] | None = None) -> int:
             out["mlx_saved"] = True
             out["hint"] = (
                 f"Profile {p.mlx_profile_id} should appear in Multilogin app "
-                f"(folder {p.mlx_folder_id}). Then: nextbrowser browser-use connect --account {p.account_id}"
+                f"(folder {p.mlx_folder_id}). Then: nextbrowser connect --account {p.account_id}"
             )
             print(json.dumps(out, indent=2))
             return 0
@@ -743,33 +594,12 @@ def main(argv: list[str] | None = None) -> int:
                     {
                         "success": True,
                         "account_id": creds.account_id,
-                        "message": "Credentials saved for agent-run sensitive_data.",
+                        "message": "Credentials saved for CDP login assistance.",
                     },
                     indent=2,
                 )
             )
             return 0
-
-    if args.command == "agent-run":
-        from nextbrowser_harness.agent.runner import run_agent
-
-        res = run_agent(
-            harness.config,
-            args.task,
-            account_id=args.account,
-            model=args.model,
-            url=args.url,
-            login_url=args.login_url,
-            username=args.username,
-            password=args.password,
-            enable_captcha=args.captcha,
-            enable_approval=args.approval,
-            max_steps=args.max_steps,
-            headless=args.headless,
-            keep_open=args.keep_open,
-        )
-        print(json.dumps(res.to_dict(), indent=2))
-        return 0 if res.success else 1
 
     if args.command == "cdp":
         from nextbrowser_harness.workflows import cdp_control
@@ -786,155 +616,12 @@ def main(argv: list[str] | None = None) -> int:
             url=args.url,
             username=args.username,
             password=args.password,
-            username_index=args.username_index,
-            password_index=args.password_index,
-            submit_index=args.submit_index,
             site=args.site,
             create_if_missing=not args.no_create,
             keep_open=not args.close,
         )
         print(json.dumps(res.to_dict(), indent=2))
         return 0 if res.success else 1
-
-    if args.command == "ui":
-        from nextbrowser_harness.workflows import ui as ui_workflow
-
-        cmd = args.ui_cmd
-        if cmd == "scroll":
-            res = ui_workflow.scroll(
-                harness.config,
-                args.direction,
-                args.pages,
-            )
-            print(json.dumps(res.to_dict(), indent=2))
-            return 0 if res.success else 1
-        if cmd == "situation":
-            out = ui_workflow.situation(
-                harness.config,
-                strict=not args.permissive,
-            )
-            print(json.dumps(out, indent=2))
-            if not out.get("connected"):
-                return 1
-            if not out.get("browser_use_ok"):
-                return 1
-            if out.get("cli_should_exit_nonzero"):
-                return 1
-            return 0
-        if cmd == "require-login":
-            out = ui_workflow.require_login(harness.config)
-            print(json.dumps(out, indent=2))
-            if not out.get("connected"):
-                return 1
-            return 0 if out.get("require_login_ok") else 1
-        if cmd == "verify":
-            out = ui_workflow.verify_text(harness.config, args.text)
-            print(json.dumps(out, indent=2))
-            return 0 if out.get("verified") else 1
-        if cmd == "close":
-            out = ui_workflow.close(harness.config)
-            print(json.dumps(out, indent=2))
-            return 0 if out.get("success") else 1
-        if cmd == "chain":
-            res = ui_workflow.chain(harness.config, args.steps)
-            print(json.dumps(res.to_dict(), indent=2))
-            return 0 if res.success else 1
-        if cmd == "run":
-            bu_args = [a for a in (args.bu_args or []) if a != "--"]
-            if not bu_args:
-                print(json.dumps({"success": False, "error": "no args"}, indent=2))
-                return 1
-            res = ui_workflow.run(harness.config, bu_args[0], args=bu_args[1:])
-            print(json.dumps(res.to_dict(), indent=2))
-            return 0 if res.success else 1
-        ui_args: list[str] = []
-        if cmd in ("click", "input", "type"):
-            ui_args.append(str(args.index))
-            if cmd in ("input", "type"):
-                ui_args.append(args.text)
-        elif cmd == "open":
-            ui_args.append(args.url)
-        elif cmd == "keys":
-            ui_args.append(args.combo)
-        elif cmd == "eval":
-            ui_args.append(args.code)
-        elif cmd == "screenshot" and args.path:
-            ui_args.append(args.path)
-        res = ui_workflow.run(harness.config, cmd, args=ui_args)
-        print(json.dumps(res.to_dict(), indent=2))
-        return 0 if res.success else 1
-
-    if args.command in ("browser-use", "bu"):
-        from nextbrowser_harness.accounts.registry import Tier3AccountError
-        from nextbrowser_harness.integrations.browser_use.bridge import (
-            browser_use_doctor,
-            connect_account,
-            disconnect_account,
-            install_browser_use_skill,
-            load_session,
-            run_browser_use,
-            run_browser_use_chain,
-        )
-
-        if args.bu_cmd == "doctor":
-            print(json.dumps(browser_use_doctor(), indent=2))
-            return 0
-        if args.bu_cmd == "session":
-            sess = load_session()
-            print(json.dumps(sess or {}, indent=2))
-            return 0 if sess else 1
-        if args.bu_cmd == "install-skill":
-            from pathlib import Path
-
-            dest = Path(args.dest).expanduser() if args.dest else None
-            path = install_browser_use_skill(dest)
-            print(f"Installed browser-use skill: {path}")
-            print("Start a new agent session. Use browser-use skill for state/click/input.")
-            return 0
-        if args.bu_cmd == "connect":
-            try:
-                out = connect_account(
-                    harness.config,
-                    args.account,
-                    headless=args.headless,
-                )
-            except (Tier3AccountError, Exception) as e:
-                payload = {"success": False, "error": str(e)}
-                if isinstance(e, Tier3AccountError):
-                    payload["agent_prompt"] = e.agent_prompt
-                    payload["code"] = e.code
-                print(json.dumps(payload, indent=2))
-                return 1
-            print(json.dumps(out, indent=2))
-            return 0
-        if args.bu_cmd == "run":
-            bu_args = [a for a in (args.bu_args or []) if a != "--"]
-            if not bu_args:
-                print("Usage: nextbrowser browser-use run state")
-                return 1
-            try:
-                proc = run_browser_use(bu_args)
-            except (Tier3AccountError, FileNotFoundError) as e:
-                payload = {"success": False, "error": str(e)}
-                if isinstance(e, Tier3AccountError):
-                    payload["agent_prompt"] = e.agent_prompt
-                print(json.dumps(payload, indent=2))
-                return 1
-            return proc.returncode
-        if args.bu_cmd == "chain":
-            try:
-                proc = run_browser_use_chain(args.steps)
-            except (Tier3AccountError, FileNotFoundError) as e:
-                payload = {"success": False, "error": str(e)}
-                if isinstance(e, Tier3AccountError):
-                    payload["agent_prompt"] = e.agent_prompt
-                print(json.dumps(payload, indent=2))
-                return 1
-            return proc.returncode
-        if args.bu_cmd == "disconnect":
-            out = disconnect_account(harness.config, args.account)
-            print(json.dumps(out, indent=2))
-            return 0
 
     parser.print_help()
     return 1

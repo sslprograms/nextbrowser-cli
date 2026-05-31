@@ -75,7 +75,14 @@ class MultiloginBrowserLayer:
             mlx_folder_id=folder_id,
         )
 
-    def launch_context(self, session: BrowserSession, *, proxy=None, headless: bool = False):
+    def launch_context(
+        self,
+        session: BrowserSession,
+        *,
+        proxy=None,
+        headless: bool = False,
+        start_if_stopped: bool = True,
+    ):
         if not isinstance(session, MultiloginBrowserSession):
             session = self.ensure_profile(session.profile_id)
 
@@ -95,20 +102,26 @@ class MultiloginBrowserLayer:
         )
         if running and running.cdp_url:
             started = running
-        else:
+        elif start_if_stopped:
             started = self.client.start_profile(
                 session.mlx_folder_id,
                 session.mlx_profile_id,
                 automation_type="playwright",
                 headless=headless,
             )
-        mark_keep_alive(
-            session.profile_id,
-            mlx_profile_id=session.mlx_profile_id,
-            folder_id=session.mlx_folder_id,
-            cdp_url=started.cdp_url,
-            reason="exec",
-        )
+        else:
+            raise MultiloginXError(
+                f"MLX profile '{session.profile_id}' is not running. "
+                f"Run: nextbrowser connect --account {session.profile_id}"
+            )
+        if start_if_stopped:
+            mark_keep_alive(
+                session.profile_id,
+                mlx_profile_id=session.mlx_profile_id,
+                folder_id=session.mlx_folder_id,
+                cdp_url=started.cdp_url,
+                reason="exec",
+            )
         cdp = started.cdp_url
         if not cdp:
             raise MultiloginXError(

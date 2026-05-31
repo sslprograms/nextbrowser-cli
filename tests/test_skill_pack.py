@@ -51,11 +51,13 @@ def test_skill_teaches_agent_workflow():
     assert "connect --account" in body
     assert "nextbrowser connect" in body
     assert "disconnect" in body
-    assert "ui close" in body or "disconnect" in body
-    assert "status" in body.lower()
+    assert "disconnect" in body
+    assert "Never" in body or "never" in body.lower()
+    assert "cdp navigate" in body
     assert "Multilogin" in body and "CDP" in body
-    assert "cdp session" in body
-    assert (root / "references" / "browser-use-bridge.md").is_file()
+    assert "cdp survey" in body
+    assert "snapshot" in body.lower()
+    assert (root / "references" / "cdp-agent.md").is_file()
     assert (root / "references" / "troubleshooting.md").is_file()
 
 

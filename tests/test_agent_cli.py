@@ -1,22 +1,36 @@
-"""MLX-native passthrough (connect / state / click)."""
+"""CDP-only CLI dispatch."""
 
-from nextbrowser_harness.integrations.browser_use.agent_cli import (
-    BROWSER_USE_VERBS,
-    is_browser_use_verb,
-    try_dispatch_native_browser_use,
+from nextbrowser_harness.integrations.mlx_cdp.agent_cli import (
+    is_legacy_ui_verb,
+    try_dispatch_cdp,
 )
 
 
-def test_browser_use_verbs():
-    assert is_browser_use_verb("state")
-    assert is_browser_use_verb("click")
-    assert not is_browser_use_verb("status")
+def test_legacy_verbs_blocked():
+    assert is_legacy_ui_verb("state")
+    assert is_legacy_ui_verb("click")
+    assert is_legacy_ui_verb("close")
 
 
-def test_passthrough_without_session(tmp_path, monkeypatch):
+def test_state_rejected_with_cdp_instructions(tmp_path, capsys):
     from nextbrowser_harness.config import HarnessConfig
 
     cfg = HarnessConfig(profiles_dir=str(tmp_path))
-    monkeypatch.setenv("NEXTBROWSER_BROWSER_USE_SESSION", str(tmp_path / "missing.json"))
-    rc = try_dispatch_native_browser_use(cfg, ["state"])
+    rc = try_dispatch_cdp(
+        cfg, ["state", "--account", "alice"]
+    )
+    assert rc == 1
+    import json
+
+    out = json.loads(capsys.readouterr().out)
+    assert out["success"] is False
+    assert "CDP" in out["error"]
+    assert any("cdp send" in x for x in out["use_instead"])
+
+
+def test_ui_close_rejected(tmp_path, capsys):
+    from nextbrowser_harness.config import HarnessConfig
+
+    cfg = HarnessConfig(profiles_dir=str(tmp_path))
+    rc = try_dispatch_cdp(cfg, ["close", "--account", "alice"])
     assert rc == 1

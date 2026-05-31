@@ -1,11 +1,6 @@
-"""browser-use CDP bridge session helpers."""
+"""MLX CDP bridge session helpers + connect_account."""
 
-import json
-from pathlib import Path
-
-import pytest
-
-from nextbrowser_harness.integrations.browser_use.bridge import (
+from nextbrowser_harness.integrations.mlx_cdp.bridge import (
     load_session,
     save_session,
 )
@@ -13,7 +8,7 @@ from nextbrowser_harness.integrations.browser_use.bridge import (
 
 def test_save_and_load_session(tmp_path, monkeypatch):
     path = tmp_path / "session.json"
-    monkeypatch.setenv("NEXTBROWSER_BROWSER_USE_SESSION", str(path))
+    monkeypatch.setenv("NEXTBROWSER_MLX_SESSION", str(path))
     data = {"cdp_url": "http://127.0.0.1:9222", "account_id": "test"}
     save_session(data)
     loaded = load_session()
@@ -24,7 +19,7 @@ def test_save_and_load_session(tmp_path, monkeypatch):
 def test_connect_account_mock(tmp_path, monkeypatch):
     from nextbrowser_harness.accounts.registry import AccountRegistry
     from nextbrowser_harness.config import HarnessConfig
-    from nextbrowser_harness.integrations.browser_use.bridge import connect_account
+    from nextbrowser_harness.integrations.mlx_cdp.bridge import connect_account
     from nextbrowser_harness.integrations.multilogin.client import StartedProfile
 
     cfg = HarnessConfig(
@@ -33,7 +28,7 @@ def test_connect_account_mock(tmp_path, monkeypatch):
     )
     AccountRegistry(cfg).register("alice", mlx_profile_id="p1", mlx_folder_id="f1")
 
-    monkeypatch.setenv("NEXTBROWSER_BROWSER_USE_SESSION", str(tmp_path / "bu.json"))
+    monkeypatch.setenv("NEXTBROWSER_MLX_SESSION", str(tmp_path / "mlx.json"))
 
     class FakeClient:
         def start_profile(self, folder_id, profile_id, **kw):
@@ -46,21 +41,18 @@ def test_connect_account_mock(tmp_path, monkeypatch):
             )
 
     monkeypatch.setattr(
-        "nextbrowser_harness.integrations.browser_use.bridge.ensure_mlx_launcher_running",
+        "nextbrowser_harness.integrations.mlx_cdp.bridge.ensure_mlx_launcher_running",
         lambda: {"launcher_reachable_after": True},
     )
     monkeypatch.setattr(
-        "nextbrowser_harness.integrations.browser_use.bridge.MultiloginXClient",
+        "nextbrowser_harness.integrations.mlx_cdp.bridge.MultiloginXClient",
         lambda: FakeClient(),
     )
-    monkeypatch.setattr(
-        "nextbrowser_harness.integrations.browser_use.bridge.browser_use_bin",
-        lambda: "/usr/bin/browser-use",
-    )
 
-    out = connect_account(cfg, "alice")
+    out = connect_account(cfg, "alice", persist_session=False)
     assert out["success"]
+    assert out.get("session_persisted") is False
     assert out["cdp_url"] == "http://127.0.0.1:9222"
-    assert out.get("engine") == "mlx+playwright"
+    assert out.get("engine") == "mlx+cdp"
     assert "cdp send" in " ".join(out.get("next_commands", []))
-    assert load_session()["account_id"] == "alice"
+    assert load_session() is None

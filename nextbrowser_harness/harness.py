@@ -4,7 +4,7 @@ from pathlib import Path
 
 from nextbrowser_harness.config import HarnessConfig, resolve_config_path
 from nextbrowser_harness.accounts.registry import AccountRegistry
-from nextbrowser_harness.integrations.browser_use.bridge import load_session
+from nextbrowser_harness.integrations.mlx_cdp.bridge import load_session
 from nextbrowser_harness import agent_rules
 from nextbrowser_harness.platform_paths import cli_command_string, platform_status
 from nextbrowser_harness.onboarding import onboard_from_env, onboard_interactive
@@ -89,9 +89,10 @@ class Harness:
             "accounts": AccountRegistry(self.config).agent_summary(),
             "mlx_cdp": {
                 "engine": "cdp_raw",
-                "session": load_session(),
+                "session_file": "not used by default (pass --account; opt-in: connect --persist-session)",
+                "persisted_session": load_session(),
                 "doctor": f"{cli} multilogin doctor",
-                "primary_control": f"{cli} cdp send <Domain.method> --params '<json>'",
+                "primary_control": f"{cli} cdp send --account <name> <Domain.method> --params '<json>'",
             },
             "commands": rendered["commands"],
             "how_to_automate": rendered["automation"],

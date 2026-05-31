@@ -10,7 +10,7 @@ import yaml
 UseCase = Literal["scrape", "accounts"]
 BrowserChoice = Literal["native", "multilogin", "gologin", "octo"]
 ProxyChoice = Literal["none", "nodemaven", "custom"]
-AutomationChoice = Literal["browser_use", "playwright", "custom"]
+AutomationChoice = Literal["playwright", "custom"]
 DriverChoice = Literal["undetected", "playwright"]
 ElementSearchChoice = Literal["playwright", "indexed"]
 TierLevel = Literal[1, 2, 3]

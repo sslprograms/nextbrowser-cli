@@ -1,9 +1,10 @@
-"""One-shot login workflow — placeholders, missing accounts, end-to-end mock."""
+"""CDP-only login workflow."""
 
 from unittest.mock import patch
 
 from nextbrowser_harness.config import HarnessConfig
 from nextbrowser_harness.workflows.browser_intel import infer_logged_in_from_state
+from nextbrowser_harness.workflows.cdp_control import CDPResult
 from nextbrowser_harness.workflows.login import login
 
 
@@ -28,97 +29,46 @@ def test_login_rejects_placeholder_credentials(tmp_path):
     assert "placeholder" in res.error.lower()
 
 
-def test_login_requires_url(tmp_path):
+def test_login_happy_path_cdp(tmp_path, monkeypatch):
     cfg = _cfg(tmp_path)
-    res = login(cfg, "alice", url="")
-    assert not res.success
-    assert "url" in res.error.lower()
-
-
-def test_login_missing_account_with_no_create_returns_prompt(tmp_path):
-    cfg = _cfg(tmp_path)
-    res = login(
-        cfg,
-        "alice",
-        url="https://example.com",
-        create_if_missing=False,
-    )
-    assert not res.success
-    assert "not registered" in res.error.lower() or "unknown" in res.error.lower()
-    assert "account add" in res.agent_prompt
-
-
-def test_login_happy_path_with_indices(tmp_path, monkeypatch):
-    cfg = _cfg(tmp_path)
-    monkeypatch.setenv("NEXTBROWSER_BROWSER_USE_SESSION", str(tmp_path / "session.json"))
-
-    # Pre-register the account so login skips MLX create_profile
     from nextbrowser_harness.accounts.registry import AccountRegistry
 
     AccountRegistry(cfg).register("alice", mlx_profile_id="prof-1", mlx_folder_id="f1")
 
     with patch("nextbrowser_harness.workflows.login.connect_account") as connect_mock, patch(
-        "nextbrowser_harness.workflows.login.mlx_page"
-    ) as mlx_mock, patch(
-        "nextbrowser_harness.workflows.login.capture_state_text"
-    ) as state_mock:
+        "nextbrowser_harness.workflows.login.cdp_send"
+    ) as send_mock, patch(
+        "nextbrowser_harness.workflows.login.page_survey"
+    ) as survey_mock:
         connect_mock.return_value = {
             "success": True,
             "cdp_url": "http://127.0.0.1:9222",
             "account_id": "alice",
         }
-
-        logged_in_state = (
-            "Current URL: https://example.com/home\n[8] button Log out"
+        send_mock.return_value = CDPResult(
+            success=True,
+            method="Page.navigate",
+            params={"url": "https://example.com/home"},
+            cdp_url="http://127.0.0.1:9222",
+            account_id="alice",
         )
+        survey_mock.return_value = {
+            "success": True,
+            "segments": [
+                {
+                    "visible_text": "Log out",
+                    "logged_in_hint": True,
+                }
+            ],
+        }
 
-        class FakePage:
-            url = "https://example.com/home"
-
-            def goto(self, *a, **k):
-                pass
-
-            def wait_for_timeout(self, *a, **k):
-                pass
-
-        class FakeDriver:
-            def input_text(self, *a, **k):
-                pass
-
-            def click(self, *a, **k):
-                pass
-
-        from contextlib import contextmanager
-
-        @contextmanager
-        def fake_mlx(*a, **k):
-            yield FakePage()
-
-        mlx_mock.side_effect = fake_mlx
-        state_mock.return_value = logged_in_state
-
-        monkeypatch.setattr(
-            "nextbrowser_harness.element_search.indexed.IndexedElementSearch",
-            lambda page: FakeDriver(),
-        )
-
-        res = login(
-            cfg,
-            "alice",
-            url="https://example.com/login",
-            username="real_user",
-            password="real_pass",
-            username_index=1,
-            password_index=2,
-            submit_index=3,
-        )
+        res = login(cfg, "alice", url="https://example.com/home")
 
     assert res.success
-    assert res.cdp_url == "http://127.0.0.1:9222"
-    assert "open" in res.actions_run
-    assert "click" in res.actions_run
-    assert res.next_commands  # tells agent how to continue
-    assert "ui" in " ".join(res.next_commands)
+    assert "cdp:Page.navigate" in res.actions_run
+    assert "cdp:survey" in res.actions_run
+    assert any("cdp survey" in c for c in res.next_commands)
+    assert not any("ui " in c for c in res.next_commands)
 
 
 def test_infer_logged_in_from_state_detects_login_page():

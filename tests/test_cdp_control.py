@@ -13,24 +13,20 @@ def test_parse_params_json():
     assert cdp_control.parse_params("") == {}
 
 
-def test_cdp_send_no_session(tmp_path, monkeypatch):
+def test_cdp_send_requires_account(tmp_path):
     cfg = HarnessConfig(profiles_dir=str(tmp_path))
-    monkeypatch.setattr(
-        "nextbrowser_harness.workflows.cdp_control.load_session",
-        lambda: {},
-    )
     res = cdp_control.cdp_send(cfg, "Page.navigate", {"url": "https://example.com"})
     assert not res.success
-    assert "No MLX CDP session" in (res.error or "")
+    assert "--account" in (res.error or "")
 
 
 def test_cdp_send_success(tmp_path, monkeypatch):
     cfg = HarnessConfig(profiles_dir=str(tmp_path))
     monkeypatch.setenv(
-        "NEXTBROWSER_BROWSER_USE_SESSION",
+        "NEXTBROWSER_MLX_SESSION",
         str(tmp_path / "sess.json"),
     )
-    from nextbrowser_harness.integrations.browser_use.bridge import save_session
+    from nextbrowser_harness.integrations.mlx_cdp.bridge import save_session
 
     save_session({"cdp_url": "http://127.0.0.1:9222", "account_id": "alice"})
 
@@ -48,8 +44,16 @@ def test_cdp_send_success(tmp_path, monkeypatch):
         page.context.new_cdp_session = MagicMock(return_value=mock_client)
         yield page
 
-    with patch("nextbrowser_harness.workflows.cdp_control.mlx_page", fake_mlx):
-        res = cdp_control.cdp_send(cfg, "Runtime.evaluate", {"expression": "1+1"})
+    with patch(
+        "nextbrowser_harness.workflows.cdp_control.resolve_running_cdp",
+        lambda *a, **k: ("http://127.0.0.1:9222", "p1", "f1"),
+    ), patch("nextbrowser_harness.workflows.cdp_control.mlx_page", fake_mlx):
+        res = cdp_control.cdp_send(
+            cfg,
+            "Runtime.evaluate",
+            {"expression": "1+1"},
+            account_id="alice",
+        )
     assert res.success
     assert res.method == "Runtime.evaluate"
     mock_client.send.assert_called_once_with("Runtime.evaluate", {"expression": "1+1"})
@@ -68,7 +72,14 @@ def test_cli_send_json(tmp_path, capsys):
         )
         rc = cdp_control.cli_main(
             cfg,
-            ["send", "Page.navigate", "--params", '{"url":"https://a.com"}'],
+            [
+                "--account",
+                "alice",
+                "send",
+                "Page.navigate",
+                "--params",
+                '{"url":"https://a.com"}',
+            ],
         )
     assert rc == 0
     out = json.loads(capsys.readouterr().out)

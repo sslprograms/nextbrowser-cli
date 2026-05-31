@@ -1,8 +1,8 @@
 """
 Playwright over Multilogin CDP — no browser-use CLI or cloud API.
 
-Each CLI command reconnects to the MLX profile's CDP port (profile stays open).
-Agents use ``nextbrowser ui state / click / type`` like browser-use UX, MLX-only.
+Requires an explicit account name. Does not read ~/.nextbrowser session files
+unless the caller passes use_saved_session=True.
 """
 
 from __future__ import annotations
@@ -11,20 +11,11 @@ from contextlib import contextmanager
 from typing import Any, Iterator
 
 from nextbrowser_harness.config import HarnessConfig
+from nextbrowser_harness.integrations.multilogin.account_cli import (
+    AccountRequiredError,
+    resolve_account_id,
+)
 from nextbrowser_harness.integrations.multilogin.browser import MultiloginBrowserLayer
-
-
-def load_mlx_session() -> dict[str, Any] | None:
-    """CDP session metadata (account, mlx profile, cdp_url)."""
-    from nextbrowser_harness.integrations.browser_use.bridge import load_session
-
-    return load_session()
-
-
-def save_mlx_session(data: dict[str, Any]) -> None:
-    from nextbrowser_harness.integrations.browser_use.bridge import save_session
-
-    save_session(data)
 
 
 @contextmanager
@@ -32,23 +23,19 @@ def mlx_page(
     config: HarnessConfig,
     *,
     account_id: str | None = None,
+    use_saved_session: bool = False,
     headless: bool = False,
 ) -> Iterator[Any]:
     """
-    Yield a Playwright Page attached to the MLX profile via CDP.
-    Detaches Playwright on exit; MLX browser keeps running (cookies persist).
+    Yield a Playwright Page attached to a **running** MLX profile via CDP.
+
+    Requires ``connect --account <name>`` first (does not auto-start the profile).
     """
-    sess = load_mlx_session()
-    aid = account_id or (sess or {}).get("account_id") or ""
-    if not aid:
-        raise RuntimeError(
-            "No MLX session. Run: nextbrowser connect --account <name> "
-            "or nextbrowser login <account> --url <url>"
-        )
+    aid = resolve_account_id(account_id, use_saved_session=use_saved_session)
 
     layer = MultiloginBrowserLayer.from_config(config)
     session = layer.ensure_profile(aid)
-    ctx = layer.launch_context(session, headless=headless)
+    ctx = layer.launch_context(session, headless=headless, start_if_stopped=False)
     page = ctx.pages[0] if ctx.pages else ctx.new_page()
     try:
         yield page
@@ -57,7 +44,7 @@ def mlx_page(
 
 
 def capture_state_text(page) -> str:
-    """Indexed element map + URL (agent-readable, same role as browser-use state)."""
+    """Indexed element map + URL (legacy helper)."""
     from nextbrowser_harness.element_search.indexed import IndexedElementSearch
 
     url = page.url or ""
